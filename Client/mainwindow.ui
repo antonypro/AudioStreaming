@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>151</width>
-    <height>131</height>
+    <width>181</width>
+    <height>154</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -15,6 +15,9 @@
   </property>
   <widget class="QWidget" name="centralWidget">
    <layout class="QGridLayout" name="gridLayout">
+    <item row="4" column="0" colspan="2">
+     <widget class="QLineEdit" name="lineEdit"/>
+    </item>
     <item row="2" column="0">
      <widget class="QLabel" name="label">
       <property name="text">
@@ -29,7 +32,7 @@
       </property>
      </widget>
     </item>
-    <item row="10" column="0">
+    <item row="9" column="0">
      <spacer name="horizontalSpacer">
       <property name="orientation">
        <enum>Qt::Horizontal</enum>
@@ -42,18 +45,25 @@
       </property>
      </spacer>
     </item>
-    <item row="10" column="2">
+    <item row="9" column="1">
      <widget class="QPushButton" name="pushButton">
       <property name="text">
        <string>Connect</string>
       </property>
      </widget>
     </item>
-    <item row="4" column="0" colspan="3">
-     <widget class="QLineEdit" name="lineEdit"/>
-    </item>
-    <item row="7" column="0" colspan="3">
+    <item row="7" column="0" colspan="2">
      <widget class="QLineEdit" name="lineEdit_2"/>
+    </item>
+    <item row="8" column="0" colspan="2">
+     <widget class="QCheckBox" name="checkBox">
+      <property name="enabled">
+       <bool>false</bool>
+      </property>
+      <property name="text">
+       <string>Record</string>
+      </property>
+     </widget>
     </item>
    </layout>
   </widget>

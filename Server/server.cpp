@@ -2,26 +2,33 @@
 
 Server::Server(quint16 port, QObject *parent) : QObject(parent)
 {
-    socket = 0;
     server = new QTcpServer(this);
     connect(server, SIGNAL(newConnection()), SLOT(newConnection()));
     server->listen(QHostAddress::Any, port);
 }
 
-void Server::newConnection()
+void Server::setHeader(QByteArray data)
 {
-    socket = server->nextPendingConnection();
-    connect(socket, SIGNAL(disconnected()), socket, SLOT(deleteLater()));
-    connect(socket, SIGNAL(destroyed()), SLOT(zeropointer()));
+    header = data;
 }
 
-void Server::zeropointer()
+void Server::newConnection()
 {
-    socket = 0;
+    QTcpSocket *socket = server->nextPendingConnection();
+    connect(socket, SIGNAL(disconnected()), SLOT(disconnected()));
+    socket->write(header);
+    sockets.append(socket);
+}
+
+void Server::disconnected()
+{
+    QTcpSocket *socket = qobject_cast<QTcpSocket*>(sender());
+    sockets.removeAll(socket);
+    socket->deleteLater();
 }
 
 void Server::writeData(QByteArray data)
 {
-    if (socket)
+    foreach (QTcpSocket *socket, sockets)
         socket->write(data);
 }

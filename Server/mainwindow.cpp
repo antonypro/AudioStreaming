@@ -29,6 +29,7 @@ void MainWindow::on_pushButton_clicked()
     input = new AudioInput(devinfo, this);
     quint16 port = ui->lineEdit->text().toInt();
     server = new Server(port, this);
+    server->setHeader(input->header());
     connect(input, SIGNAL(dataReady(QByteArray)), server, SLOT(writeData(QByteArray)));
 
     ui->comboBox->setEnabled(false);

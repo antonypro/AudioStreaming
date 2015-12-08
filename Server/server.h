@@ -14,14 +14,16 @@ signals:
 
 public slots:
     void writeData(QByteArray data);
+    void setHeader(QByteArray data);
 
 private slots:
     void newConnection();
-    void zeropointer();
+    void disconnected();
 
 private:
     QTcpServer *server;
-    QTcpSocket *socket;
+    QList<QTcpSocket*> sockets;
+    QByteArray header;
 };
 
 #endif // SERVER_H

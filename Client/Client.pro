@@ -1,9 +1,3 @@
-#-------------------------------------------------
-#
-# Project created by QtCreator 2014-08-26T23:31:59
-#
-#-------------------------------------------------
-
 QT       += core gui multimedia network
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
@@ -15,10 +9,12 @@ TEMPLATE = app
 SOURCES += main.cpp\
         mainwindow.cpp \
     audiooutput.cpp \
-    client.cpp
+    client.cpp \
+    audiorecorder.cpp
 
 HEADERS  += mainwindow.h \
     audiooutput.h \
-    client.h
+    client.h \
+    audiorecorder.h
 
 FORMS    += mainwindow.ui

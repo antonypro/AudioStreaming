@@ -8,7 +8,7 @@ class AudioOutput : public QObject
 {
     Q_OBJECT
 public:
-    explicit AudioOutput(QObject *parent = 0);
+    explicit AudioOutput(QAudioFormat format, QObject *parent = 0);
 
 signals:
 

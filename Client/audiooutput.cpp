@@ -1,15 +1,7 @@
 #include "audiooutput.h"
 
-AudioOutput::AudioOutput(QObject *parent) : QObject(parent)
+AudioOutput::AudioOutput(QAudioFormat format, QObject *parent) : QObject(parent)
 {
-    QAudioFormat format;
-    format.setChannelCount(1);
-    format.setSampleRate(8000);
-    format.setSampleSize(8);
-    format.setCodec("audio/pcm");
-    format.setByteOrder(QAudioFormat::LittleEndian);
-    format.setSampleType(QAudioFormat::UnSignedInt);
-
     audio = new QAudioOutput(format, this);
     audio->setBufferSize(8192);
 
@@ -18,5 +10,19 @@ AudioOutput::AudioOutput(QObject *parent) : QObject(parent)
 
 void AudioOutput::writeData(QByteArray data)
 {
-    device->write(data.data(), data.size());
+    int readlen = audio->periodSize();
+
+    int chunks = audio->bytesFree() / readlen;
+
+    while (chunks)
+    {
+        QByteArray middle = data.mid(0, readlen);
+        int len = middle.size();
+        data.remove(0, len);
+
+        if (len)
+            device->write(middle);
+
+        chunks--;
+    }
 }

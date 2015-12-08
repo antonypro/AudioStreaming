@@ -15,6 +15,7 @@ signals:
     void dataReady(QByteArray data);
 
 public slots:
+    QByteArray header();
 
 private slots:
     void readyRead();
@@ -22,6 +23,7 @@ private slots:
 private:
     QAudioInput *audio;
     QIODevice *device;
+    QAudioFormat format;
 };
 
 #endif // AUDIOINPUT_H

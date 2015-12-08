@@ -5,6 +5,7 @@
 #include <QtGui>
 #include <QtWidgets>
 #include "client.h"
+#include "audiorecorder.h"
 
 namespace Ui {
 class MainWindow;
@@ -21,9 +22,12 @@ public:
 private slots:
     void on_pushButton_clicked();
 
+    void on_checkBox_clicked(bool checked);
+
 private:
     Ui::MainWindow *ui;
     Client *client;
+    AudioRecorder *recorder;
 };
 
 #endif // MAINWINDOW_H
