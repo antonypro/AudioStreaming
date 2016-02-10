@@ -13,7 +13,7 @@ Cross platform audio streaming over TCP socket demo.
 * Audio can be buffered to reduce the occurrence of buffer underrun in the client side.
 * On the client side is possible to set a volume that are directly applied to audio samples.
 
-### Compilation Info
+### Compilation Info:
 
 This application has two modes of usage: 
 
