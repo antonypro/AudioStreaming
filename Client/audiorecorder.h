@@ -13,7 +13,6 @@ public:
 
 public slots:
     bool open();
-    void write(const QByteArray &data);
     void close();
 
 private:

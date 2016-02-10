@@ -1,20 +1,28 @@
-QT       += core gui multimedia network
-
-greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
+QT       += core gui widgets multimedia network
 
 TARGET = Client
 TEMPLATE = app
 
+include(../common.pri)
 
 SOURCES += main.cpp\
         mainwindow.cpp \
     audiooutput.cpp \
     client.cpp \
-    audiorecorder.cpp
+    audiorecorder.cpp \
+    levelwidget.cpp
 
 HEADERS  += mainwindow.h \
     audiooutput.h \
     client.h \
-    audiorecorder.h
+    audiorecorder.h \
+    levelwidget.h
 
-FORMS    += mainwindow.ui
+WITH_OPUS {
+
+HEADERS  += \
+    opusdecode.h
+
+SOURCES += \
+    opusdecode.cpp
+}

@@ -4,17 +4,24 @@
 #include <QtCore>
 #include <QtMultimedia>
 #include "server.h"
+#ifdef OPUS
+#include <r8brain.h>
+#include <opusencode.h>
+#endif
 
 class AudioInput : public QObject
 {
     Q_OBJECT
 public:
-    explicit AudioInput(QAudioDeviceInfo devinfo, QObject *parent = 0);
+    explicit AudioInput(QObject *parent = 0);
 
 signals:
-    void dataReady(QByteArray data);
+    void error(QString);
+    void adjustSettings(QAudioFormat);
+    void dataReady(QByteArray);
 
 public slots:
+    void start(const QAudioDeviceInfo &devinfo, int samplesize, int samplerate, int channels, int sampletype, int byteorder);
     QByteArray header();
 
 private slots:
@@ -24,6 +31,11 @@ private:
     QAudioInput *audio;
     QIODevice *device;
     QAudioFormat format;
+#ifdef OPUS
+    r8brain *res;
+    OpusEncode *opus;
+    QByteArray buffer;
+#endif
 };
 
 #endif // AUDIOINPUT_H

@@ -1,13 +1,21 @@
 #include "server.h"
 
-Server::Server(quint16 port, QObject *parent) : QObject(parent)
+Server::Server(QObject *parent) : QObject(parent)
 {
-    server = new QTcpServer(this);
-    connect(server, SIGNAL(newConnection()), SLOT(newConnection()));
-    server->listen(QHostAddress::Any, port);
+
 }
 
-void Server::setHeader(QByteArray data)
+void Server::start(quint16 port)
+{
+    server = new QTcpServer(this);
+    connect(server, &QTcpServer::newConnection, this, &Server::newConnection);
+    bool listening = server->listen(QHostAddress::Any, port);
+
+    if (!listening)
+        emit error(server->errorString());
+}
+
+void Server::setHeader(const QByteArray &data)
 {
     header = data;
 }
@@ -15,7 +23,7 @@ void Server::setHeader(QByteArray data)
 void Server::newConnection()
 {
     QTcpSocket *socket = server->nextPendingConnection();
-    connect(socket, SIGNAL(disconnected()), SLOT(disconnected()));
+    connect(socket, &QTcpSocket::disconnected, this, &Server::disconnected);
     socket->write(header);
     sockets.append(socket);
 }
@@ -27,8 +35,22 @@ void Server::disconnected()
     socket->deleteLater();
 }
 
-void Server::writeData(QByteArray data)
+void Server::writeData(const QByteArray &data)
 {
     foreach (QTcpSocket *socket, sockets)
+    {
+#ifdef OPUS
+        socket->write(IntToArray(data.size()));
+#endif
         socket->write(data);
+        socket->flush();
+    }
+}
+
+QByteArray Server::IntToArray(qint32 value)
+{
+    QByteArray data;
+    QDataStream stream(&data, QIODevice::WriteOnly);
+    stream << value;
+    return data;
 }

@@ -8,13 +8,17 @@ class Server : public QObject
 {
     Q_OBJECT
 public:
-    explicit Server(quint16 port, QObject *parent = 0);
+    explicit Server(QObject *parent = 0);
+
+    static QByteArray IntToArray(qint32 value);
 
 signals:
+    void error(QString);
 
 public slots:
-    void writeData(QByteArray data);
-    void setHeader(QByteArray data);
+    void start(quint16 port);
+    void writeData(const QByteArray &data);
+    void setHeader(const QByteArray &data);
 
 private slots:
     void newConnection();

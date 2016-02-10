@@ -7,6 +7,9 @@ AudioRecorder::AudioRecorder(const QString &name, const QAudioFormat &format, QO
 
 AudioRecorder::~AudioRecorder()
 {
+    if (!isOpen())
+        return;
+
     close();
 }
 
@@ -21,11 +24,14 @@ bool AudioRecorder::hasSupportedFormat()
 
 bool AudioRecorder::open()
 {
-    if (!hasSupportedFormat()) {
+    if (!hasSupportedFormat())
+    {
         setErrorString("Wav PCM supports only 8-bit unsigned samples "
                        "or 16-bit (or more) signed samples (in little endian)");
         return false;
-    } else {
+    }
+    else
+    {
         if (!QFile::open(ReadWrite | Truncate))
             return false;
         writeHeader();
@@ -59,11 +65,6 @@ void AudioRecorder::writeHeader()
     out << quint32(0); // Placeholder for the data chunk size (filled by close())
 
     Q_ASSERT(pos() == 44); // Must be 44 for WAV PCM
-}
-
-void AudioRecorder::write(const QByteArray &data)
-{
-    QFile::write(data);
 }
 
 void AudioRecorder::close()

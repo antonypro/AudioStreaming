@@ -6,10 +6,7 @@
 #include <QtWidgets>
 #include "client.h"
 #include "audiorecorder.h"
-
-namespace Ui {
-class MainWindow;
-}
+#include "levelwidget.h"
 
 class MainWindow : public QMainWindow
 {
@@ -20,13 +17,35 @@ public:
     ~MainWindow();
 
 private slots:
+    void finish();
     void on_pushButton_clicked();
-
     void on_checkBox_clicked(bool checked);
+    void level(float size);
+    void write(QByteArray data);
+    void on_horizontalSlider_valueChanged(int value);
+    void error(const QString &errorstr);
+    void zeropointer(QObject *object);
 
 private:
-    Ui::MainWindow *ui;
+    void startStop();
+    void closeEvent(QCloseEvent *);
+
+    bool finishing;
+
+    QLabel *label1;
+    QLineEdit *edit1;
+    QLabel *label2;
+    QLineEdit *edit2;
+    QLabel *label3;
+    QLineEdit *edit3;
+    QCheckBox *checkbox;
+    QLabel *label4;
+    QSlider *slider;
+    QPushButton *button;
+    LevelWidget *levelwidget;
+
     Client *client;
+    QThread *thread;
     AudioRecorder *recorder;
 };
 
