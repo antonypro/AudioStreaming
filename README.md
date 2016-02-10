@@ -1,7 +1,9 @@
 # Audio Streaming example for Qt
+
 Cross platform audio streaming over TCP socket demo.
 
 ### Features:
+
 * Both client and server are fully multithreaded.
 * Audio can be streamed compressed using Opus codec (Not available by default.).
 * Change main settings of streaming without need to recompile the application.
@@ -12,6 +14,7 @@ Cross platform audio streaming over TCP socket demo.
 * On the client side is possible to set a volume that are directly applied to audio samples.
 
 ### Compilation Info
+
 This application has two modes of usage: 
 
 First mode: Configured to compress audio using Opus codec and them stream it.
@@ -20,7 +23,7 @@ Second mode: Configured to transmit raw/uncompressed data directly. (default)
 
 Both methods require Qt 5.x.x and Qt Creator.
 
-If you're not intended to compress the audio and just play with raw/uncompressed audio, ignore these steps and go the second mode of usage.
+If you're not intended to compress the audio and just play with raw/uncompressed audio, ignore these steps and go to the second mode of usage.
 
 ### First mode: 
 
