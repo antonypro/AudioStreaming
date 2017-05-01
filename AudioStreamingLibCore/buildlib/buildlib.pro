@@ -1,0 +1,1 @@
+include(../AudioStreamingLibCore/AudioStreamingLibCore.pri)
