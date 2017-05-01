@@ -1,10 +1,6 @@
 The MIT License (MIT)
 
-<<<<<<< HEAD
 Copyright (c) 2016-2017 Antônio Dias
-=======
-Copyright (c) 2016 Antônio Dias
->>>>>>> bd8e3c47dc64cb48ad94d596d2ab8aff3f468177
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
