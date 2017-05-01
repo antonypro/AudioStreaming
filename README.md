@@ -21,7 +21,7 @@ You can choose to compress audio with Opus codec or not. If choose to compress y
 
 If you want to static link [OpenSsl](https://www.openssl.org/),(independently if generating a shared or static library) just compile OpenSsl to fit your needs.
 
-If not compressing audio and not directly dealing with OpenSsl the only requirement is Qt5.
+If not compressing audio and not directly dealing with OpenSsl the only requirement is Qt5 and a C++11 compiler.
 
 ### Compilation Info:
 
