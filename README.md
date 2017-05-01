@@ -15,6 +15,8 @@ Cross platform audio streaming and VoIP library for local networks.
 
 Qt 5.x
 
+C++11 compiler.
+
 You can choose to compress audio with Opus codec or not. If choose to compress you'll need to compile [Opus](https://www.opus-codec.org/) to your targets(Windows, Linux or Android). To compile Opus for android see the opus-android README, and need to download [r8brain](https://github.com/avaneev/r8brain-free-src)
 
 If you want to static link [OpenSsl](https://www.openssl.org/),(independently if generating a shared or static library) just compile OpenSsl to fit your needs.
