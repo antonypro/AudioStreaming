@@ -11,11 +11,11 @@ class AudioOutput : public QObject
 {
     Q_OBJECT
 public:
-    explicit AudioOutput(QObject *parent = 0);
+    explicit AudioOutput(QObject *parent = nullptr);
 
 signals:
     void veryOutputData(QByteArray);
-    void currentlevel(qreal);
+    void currentlevel(float);
     void error(QString);
 
 public slots:
@@ -28,6 +28,14 @@ public slots:
     void write(const QByteArray &data);
 
 private slots:
+    void startPrivate(const QAudioDeviceInfo &devinfo,
+               const QAudioFormat &format,
+               int time_to_buffer,
+               bool is_very_output_enabled);
+
+    void setVolumePrivate(int volume);
+    void writePrivate(const QByteArray &data);
+
     void verifyBuffer();
     void preplay();
     void play();
@@ -41,10 +49,12 @@ private:
     bool m_buffer_requested;
     bool m_play_called;
     int m_volume;
+    float m_sample_align;
     int m_size_to_buffer;
     int m_time_to_buffer;
     int m_max_size_to_buffer;
     QAudioFormat m_format;
+    QAudioFormat m_supported_format;
     LevelMeter *m_level_meter;
 };
 

@@ -16,7 +16,7 @@ void LevelWidget::zerolevel()
     setlevel(0);
 }
 
-void LevelWidget::setlevel(qreal level)
+void LevelWidget::setlevel(float level)
 {
     m_timer->stop();
     m_level = level;
@@ -26,12 +26,12 @@ void LevelWidget::setlevel(qreal level)
 
 void LevelWidget::paintEvent(QPaintEvent *event)
 {
-    Q_UNUSED(event);
+    Q_UNUSED(event)
 
     QPainter painter(this);
     QRect currentlevelrect = rect();
-    painter.fillRect(currentlevelrect, Qt::white);
+    painter.fillRect(currentlevelrect, Qt::black);
     int height = currentlevelrect.height();
     currentlevelrect.adjust(0, height - m_level * height, 0, 0);
-    painter.fillRect(currentlevelrect, Qt::red);
+    painter.fillRect(currentlevelrect, Qt::green);
 }

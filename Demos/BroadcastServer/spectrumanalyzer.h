@@ -21,7 +21,7 @@ class SpectrumAnalyzer : public QObject
 {
     Q_OBJECT
 public:
-    explicit SpectrumAnalyzer(QObject *parent = 0);
+    explicit SpectrumAnalyzer(QObject *parent = nullptr);
     ~SpectrumAnalyzer();
 
 signals:
@@ -38,7 +38,6 @@ private:
     QVector<float> m_window;
     QByteArray m_spectrum_buffer;
     QAudioFormat m_format;
-    int m_sample_size;
 };
 
 #endif // SPECTRUMANALYZER_H

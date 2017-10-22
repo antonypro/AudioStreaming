@@ -14,24 +14,49 @@ LevelWidget::LevelWidget(QWidget *parent) : QWidget(parent)
 void LevelWidget::zerolevel()
 {
     setlevel(0);
+    m_rms_size = 0;
+    m_sum_rms = 0;
 }
 
-void LevelWidget::setlevel(qreal level)
+void LevelWidget::setlevel(float level)
 {
     m_timer->stop();
     m_level = level;
     repaint();
     m_timer->start();
+
+    m_rms_size = 0;
+    m_sum_rms = 0;
+}
+
+void LevelWidget::calculateRMSLevel(const QByteArray &data)
+{
+    int size = data.size() / sizeof(float);
+
+    const float *samples = (const float*)data.constData();
+
+    m_rms_size += size;
+
+    for (int i = 0; i < size; i++)
+        m_sum_rms += (samples[i] * samples[i]);
 }
 
 void LevelWidget::paintEvent(QPaintEvent *event)
 {
-    Q_UNUSED(event);
+    Q_UNUSED(event)
+
+    float m_rms_level = 0;
+
+    if (m_rms_size > 0)
+        m_rms_level = qSqrt((1 / (float)m_rms_size) * m_sum_rms);
 
     QPainter painter(this);
     QRect currentlevelrect = rect();
-    painter.fillRect(currentlevelrect, Qt::white);
+    painter.fillRect(currentlevelrect, Qt::black);
     int height = currentlevelrect.height();
     currentlevelrect.adjust(0, height - m_level * height, 0, 0);
+    painter.fillRect(currentlevelrect, Qt::green);
+    currentlevelrect = rect();
+    currentlevelrect.adjust(0, height - m_rms_level * height, 0, 0);
     painter.fillRect(currentlevelrect, Qt::red);
 }

@@ -17,7 +17,7 @@ FlowControl::FlowControl(QObject *parent) : QObject(parent)
     m_timer = new QTimer(this);
     m_timer->setTimerType(Qt::PreciseTimer);
     connect(m_timer, &QTimer::timeout, this, &FlowControl::askforbytes);
-    m_timer->setInterval(10);
+    m_timer->setInterval(interval);
 }
 
 void FlowControl::start(int sample_rate, int channels, int bits_per_sample)
@@ -53,7 +53,6 @@ void FlowControl::start(int sample_rate, int channels, int bits_per_sample)
 
     switch (bits_per_sample)
     {
-    case 16:
     case 32:
         break;
     default:
@@ -76,7 +75,7 @@ void FlowControl::askforbytes() //Compute the size in bytes of the elapsed time
     qint64 elapsed = elapsed_time - m_elapsed_time;
     m_elapsed_time = elapsed_time;
 
-    int bytes = nanoTimeToSize(elapsed, m_bits_per_sample, m_channels, m_sample_rate);
+    int bytes = nanoTimeToSize(elapsed, m_channels, sizeof(float) * 8, m_sample_rate);
 
     emit getbytes(bytes);
 }

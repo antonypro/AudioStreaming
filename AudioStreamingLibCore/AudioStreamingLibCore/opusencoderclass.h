@@ -14,7 +14,7 @@ class OpusEncoderClass : public QObject
 {
     Q_OBJECT
 public:
-    explicit OpusEncoderClass(QObject *parent = 0);
+    explicit OpusEncoderClass(QObject *parent = nullptr);
     ~OpusEncoderClass();
 
 signals:
@@ -26,6 +26,9 @@ public slots:
     void write(const QByteArray &data);
 
 private slots:
+    void startPrivate(int sample_rate, int channels, int bitrate, int frame_size, int application);
+    void writePrivate(const QByteArray &data);
+
     QByteArray encode();
 
 private:

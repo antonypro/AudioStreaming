@@ -11,7 +11,7 @@ class AbstractServer : public QObject
 {
     Q_OBJECT
 public:
-    explicit AbstractServer(QObject *parent = 0);
+    explicit AbstractServer(QObject *parent = nullptr);
 
 signals:
     void connected(PeerData,QString);

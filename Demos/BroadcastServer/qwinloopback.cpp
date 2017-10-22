@@ -182,13 +182,12 @@ HRESULT QWinLoopback::LoopbackCapture(
     }
 
     {
-        // coerce int-16 wave format
+        // coerce float wave format
         // can do this in-place since we're not changing the size of the format
-        // also, the engine will auto-convert from float to int for us
         switch (pwfx->wFormatTag) {
         case WAVE_FORMAT_IEEE_FLOAT:
-            pwfx->wFormatTag = WAVE_FORMAT_PCM;
-            pwfx->wBitsPerSample = 16;
+            pwfx->wFormatTag = WAVE_FORMAT_IEEE_FLOAT;
+            pwfx->wBitsPerSample = 32;
             pwfx->nBlockAlign = pwfx->nChannels * pwfx->wBitsPerSample / 8;
             pwfx->nAvgBytesPerSec = pwfx->nBlockAlign * pwfx->nSamplesPerSec;
             break;
@@ -198,13 +197,13 @@ HRESULT QWinLoopback::LoopbackCapture(
             // naked scope for case-local variable
             PWAVEFORMATEXTENSIBLE pEx = reinterpret_cast<PWAVEFORMATEXTENSIBLE>(pwfx);
             if (IsEqualGUID(KSDATAFORMAT_SUBTYPE_IEEE_FLOAT, pEx->SubFormat)) {
-                pEx->SubFormat = KSDATAFORMAT_SUBTYPE_PCM;
-                pEx->Samples.wValidBitsPerSample = 16;
-                pwfx->wBitsPerSample = 16;
+                pEx->SubFormat = KSDATAFORMAT_SUBTYPE_IEEE_FLOAT;
+                pEx->Samples.wValidBitsPerSample = 32;
+                pwfx->wBitsPerSample = 32;
                 pwfx->nBlockAlign = pwfx->nChannels * pwfx->wBitsPerSample / 8;
                 pwfx->nAvgBytesPerSec = pwfx->nBlockAlign * pwfx->nSamplesPerSec;
             } else {
-                printf("Don't know how to coerce mix format to int-16\n");
+                printf("Don't know how to coerce mix format to float\n");
                 CoTaskMemFree(pwfx);
                 pAudioClient->Release();
                 sem1.release();
@@ -214,7 +213,7 @@ HRESULT QWinLoopback::LoopbackCapture(
             break;
 
         default:
-            printf("Don't know how to coerce WAVEFORMATEX with wFormatTag = 0x%08x to int-16\n", pwfx->wFormatTag);
+            printf("Don't know how to coerce WAVEFORMATEX with wFormatTag = 0x%08x to float\n", pwfx->wFormatTag);
             CoTaskMemFree(pwfx);
             pAudioClient->Release();
             pMMDevice->Release();
@@ -227,7 +226,7 @@ HRESULT QWinLoopback::LoopbackCapture(
         QAudioFormat format;
         format.setCodec("audio/pcm");
         format.setByteOrder(QAudioFormat::LittleEndian);
-        format.setSampleType(QAudioFormat::SignedInt);
+        format.setSampleType(QAudioFormat::Float);
         format.setSampleRate(pwfx->nSamplesPerSec);
         format.setChannelCount(pwfx->nChannels);
         format.setSampleSize(pwfx->wBitsPerSample);

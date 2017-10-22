@@ -9,10 +9,10 @@ class LevelWidget : public QWidget
 {
     Q_OBJECT
 public:
-    explicit LevelWidget(QWidget *parent = 0);
+    explicit LevelWidget(QWidget *parent = nullptr);
 
 public slots:
-    void setlevel(qreal level);
+    void setlevel(float level);
 
 private slots:
     void zerolevel();
@@ -20,7 +20,7 @@ private slots:
 private:
     void paintEvent(QPaintEvent *event);
     QTimer *m_timer;
-    qreal m_level;
+    float m_level;
 };
 
 #endif // LEVELWIDGET_H

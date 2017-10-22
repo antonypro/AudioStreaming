@@ -13,6 +13,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 
     m_spectrum_analyzer = nullptr;
 
+    m_audio_recorder = nullptr;
+
     QWidget *widget = new QWidget(this);
 
     linehost = new QLineEdit(this);
@@ -25,28 +27,68 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     listwidgetpeers = new QListWidget(this);
     labelvolume = new QLabel(this);
     slidervolume = new QSlider(Qt::Horizontal, this);
-    bars = new Bars(this);
+
+    bars = new BarsWidget(this);
+    waveform = new WaveFormWidget(this);
     level = new LevelWidget(this);
+
+    waveform->setMinimumHeight(10);
+    waveform->setMaximumHeight(100);
+    bars->setMinimumHeight(100);
+
+    QWidget *analyzer = new QWidget(this);
+
+    QGridLayout *layout_analyzer = new QGridLayout(analyzer);
+    layout_analyzer->setMargin(0);
+    layout_analyzer->addWidget(waveform, 0, 0);
+    layout_analyzer->addWidget(bars, 1, 0);
+
+    QScrollArea *areasettings = new QScrollArea(this);
+
+    QWidget *widgetsettings = new QWidget(this);
+
+    QGridLayout *layout1 = new QGridLayout(widgetsettings);
 
     QGridLayout *layout = new QGridLayout(widget);
 
-    layout->addWidget(new QLabel("Host:", this), 0, 0);
-    layout->addWidget(linehost, 0, 1, 1, 2);
-    layout->addWidget(new QLabel("Port:", this), 1, 0);
-    layout->addWidget(lineport, 1, 1);
-    layout->addWidget(buttonconnect, 1, 2);
-    layout->addWidget(new QLabel("Buffer time(ms):", this), 2, 0);
-    layout->addWidget(linetime, 2, 1, 1, 2);
-    layout->addWidget(new QLabel("Password:", this), 3, 0);
-    layout->addWidget(linepassword, 3, 1, 1, 2);
-    layout->addWidget(tabwidget, 4, 0, 1, 3);
-    layout->addWidget(labelvolume, 5, 0, 1, 3);
-    layout->addWidget(slidervolume, 6, 0, 1, 3);
-    layout->addWidget(level, 0, 5, 7, 1);
+    layout1->addWidget(new QLabel("Host:", this), 0, 0);
+    layout1->addWidget(linehost, 0, 1, 1, 2);
+    layout1->addWidget(new QLabel("Port:", this), 1, 0);
+    layout1->addWidget(lineport, 1, 1);
+    layout1->addWidget(buttonconnect, 1, 2);
+    layout1->addWidget(new QLabel("Buffer time(ms):", this), 2, 0);
+    layout1->addWidget(linetime, 2, 1, 1, 2);
+    layout1->addWidget(new QLabel("Password:", this), 3, 0);
+    layout1->addWidget(linepassword, 3, 1, 1, 2);
 
-    tabwidget->addTab(texteditsettings, "Settings");
-    tabwidget->addTab(bars, "Spectrum Analyzer");
+    areasettings->setWidget(widgetsettings);
+
+    layout->addWidget(tabwidget, 0, 0, 1, 1);
+    layout->addWidget(labelvolume, 1, 0, 1, 1);
+    layout->addWidget(slidervolume, 2, 0, 1, 1);
+    layout->addWidget(level, 0, 1, 3, 1);
+
+    linerecordpath = new QLineEdit(this);
+    buttonsearch = new QPushButton(this);
+    buttonrecord = new QPushButton(this);
+    buttonrecordstop = new QPushButton(this);
+    lcdtime = new QLCDNumber(this);
+
+    QWidget *recorder = new QWidget(this);
+
+    QGridLayout *layout_record = new QGridLayout(recorder);
+    layout_record->addWidget(new QLabel("Wave file:", this), 0, 0);
+    layout_record->addWidget(linerecordpath, 0, 1);
+    layout_record->addWidget(buttonsearch, 0, 2);
+    layout_record->addWidget(buttonrecord, 0, 3);
+    layout_record->addWidget(buttonrecordstop, 0, 4);
+    layout_record->addWidget(lcdtime, 1, 0, 1, 5);
+
+    tabwidget->addTab(areasettings, "Settings");
+    tabwidget->addTab(analyzer, "Analyzer");
     tabwidget->addTab(listwidgetpeers, "Search");
+    tabwidget->addTab(recorder, "Record");
+    tabwidget->addTab(texteditsettings, "Info");
 
     connect(listwidgetpeers, &QListWidget::itemClicked, this, &MainWindow::selectPeer);
 
@@ -66,15 +108,19 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     connect(linepassword, &QLineEdit::returnPressed, this, &MainWindow::start);
     connect(buttonconnect, &QPushButton::clicked, this, &MainWindow::start);
 
+    connect(buttonsearch, &QPushButton::clicked, this, &MainWindow::setRecordPath);
+    connect(buttonrecord, &QPushButton::clicked, this, &MainWindow::startPauseRecord);
+    connect(buttonrecordstop, &QPushButton::clicked, this, &MainWindow::stopRecord);
+
     slidervolume->setValue(100);
+
+    resetRecordPage();
 
     setCentralWidget(widget);
 
     linehost->setText("localhost");
     lineport->setText("1024");
     linetime->setText("300");
-
-    setFixedSize(sizeHint());
 }
 
 MainWindow::~MainWindow()
@@ -139,12 +185,15 @@ void MainWindow::selectPeer(QListWidgetItem *item)
 {
     linehost->setText(item->data(Qt::UserRole).toString());
     linehost->setFocus();
+    tabwidget->setCurrentIndex(0);
 }
 
 void MainWindow::start()
 {
     if (m_audio_lib)
     {
+        stopRecord();
+
         m_audio_lib->stop();
         return;
     }
@@ -157,9 +206,11 @@ void MainWindow::start()
     linepassword->setEnabled(false);
     tabwidget->setTabEnabled(2, false);
 
+    buttonrecord->setEnabled(true);
+
     m_audio_lib = new AudioStreamingLibCore(this);
 
-    connect(m_audio_lib, &AudioStreamingLibCore::destroyed, this, [this]{m_audio_lib = nullptr;});
+    connect(m_audio_lib, &AudioStreamingLibCore::destroyed, [=]{m_audio_lib = nullptr;});
 
     QByteArray password = linepassword->text().toLatin1();
 
@@ -197,7 +248,7 @@ void MainWindow::adjustSettings()
     str.append(QString("Sample size: %0 bits\n").arg(inputFormat.sampleSize()));
     str.append(QString("Sample rate: %0 hz\n").arg(inputFormat.sampleRate()));
     str.append(QString("Channels: %0\n").arg(inputFormat.channelCount()));
-    str.append(QString("Sample type: %0\n").arg((inputFormat.sampleType() == QAudioFormat::SignedInt) ? "Signed integer" : "Unsigned integer"));
+    str.append(QString("Sample type: %0\n").arg((inputFormat.sampleType()  == QAudioFormat::Float) ? "Float" : "Integer"));
     str.append(QString("Byte order: %0\n").arg((inputFormat.byteOrder() == QAudioFormat::LittleEndian) ? "Little endian" : "Big endian"));
 
     str.append("\n");
@@ -207,7 +258,7 @@ void MainWindow::adjustSettings()
     str.append(QString("Sample size: %0 bits\n").arg(format.sampleSize()));
     str.append(QString("Sample rate: %0 hz\n").arg(format.sampleRate()));
     str.append(QString("Channels: %0\n").arg(format.channelCount()));
-    str.append(QString("Sample type: %0\n").arg((format.sampleType() == QAudioFormat::SignedInt) ? "Signed integer" : "Unsigned integer"));
+    str.append(QString("Sample type: %0\n").arg((format.sampleType()  == QAudioFormat::Float) ? "Float" : "Integer"));
     str.append(QString("Byte order: %0\n").arg((format.byteOrder() == QAudioFormat::LittleEndian) ? "Little endian" : "Big endian"));
 
     str.append(QString("\nBuffer time: %0 ms").arg(m_audio_lib->streamingInfo().timeToBuffer()));
@@ -221,20 +272,132 @@ void MainWindow::adjustSettings()
         m_spectrum_analyzer->moveToThread(thread);
 
         connect(m_audio_lib, &AudioStreamingLibCore::veryOutputData, m_spectrum_analyzer, &SpectrumAnalyzer::calculateSpectrum);
-        connect(m_spectrum_analyzer, &SpectrumAnalyzer::spectrumChanged, bars, &Bars::setValues);
-        connect(m_spectrum_analyzer, &SpectrumAnalyzer::destroyed, bars, &Bars::clear);
+        connect(m_spectrum_analyzer, &SpectrumAnalyzer::spectrumChanged, bars, &BarsWidget::setValues);
+        connect(m_spectrum_analyzer, &SpectrumAnalyzer::destroyed, bars, &BarsWidget::clear);
 
         connect(m_audio_lib, &AudioStreamingLibCore::finished, m_spectrum_analyzer, &SpectrumAnalyzer::deleteLater);
         connect(this, &MainWindow::destroyed, m_spectrum_analyzer, &SpectrumAnalyzer::deleteLater);
         connect(m_spectrum_analyzer, &SpectrumAnalyzer::destroyed, thread, &QThread::quit);
         connect(thread, &QThread::finished, thread, &QThread::deleteLater);
 
-        connect(m_spectrum_analyzer, &SpectrumAnalyzer::destroyed, this, [this]{m_spectrum_analyzer = nullptr;});
+        connect(m_spectrum_analyzer, &SpectrumAnalyzer::destroyed, [=]{m_spectrum_analyzer = nullptr;});
 
         QMetaObject::invokeMethod(m_spectrum_analyzer, "start", Qt::QueuedConnection, Q_ARG(QAudioFormat, format));
 
         thread->start();
     }
+
+    {
+        waveform->start(format);
+        connect(m_audio_lib, &AudioStreamingLibCore::veryOutputData, waveform, &WaveFormWidget::calculateWaveForm);
+        connect(m_audio_lib, &AudioStreamingLibCore::finished, waveform, &WaveFormWidget::clear);
+    }
+
+    {
+        connect(m_audio_lib, &AudioStreamingLibCore::veryOutputData, level, &LevelWidget::calculateRMSLevel);
+    }
+
+    {
+        connect(m_audio_lib, &AudioStreamingLibCore::veryOutputData, level, &LevelWidget::calculateRMSLevel);
+    }
+}
+
+void MainWindow::setRecordPath()
+{
+    QString path = QFileDialog::getSaveFileName(this, "Select the wave path", QString(), "WAVE (*.wav)");
+
+    if (path.isEmpty())
+        return;
+
+    linerecordpath->setText(QDir::toNativeSeparators(path));
+}
+
+void MainWindow::startPauseRecord()
+{
+    if (m_paused)
+    {
+        if (!m_audio_recorder)
+        {
+            linerecordpath->setEnabled(false);
+            buttonsearch->setEnabled(false);
+            buttonrecordstop->setEnabled(true);
+
+            m_format = m_audio_lib->audioFormat();
+            //Change to compatible settings
+            m_format.setSampleSize(16);
+            m_format.setSampleType(QAudioFormat::SignedInt);
+
+            m_audio_recorder = new AudioRecorder(linerecordpath->text(), m_format, m_audio_lib);
+
+            connect(m_audio_recorder, &AudioRecorder::destroyed, [=]{m_audio_recorder = nullptr;});
+
+            if (!m_audio_recorder->open())
+            {
+                stopRecord();
+                QMessageBox::critical(this, "Error", "Error openning file for record!");
+                return;
+            }
+        }
+
+        connect(m_audio_lib, &AudioStreamingLibCore::veryOutputData, this, &MainWindow::writeToFile);
+
+        buttonrecord->setText("Pause");
+
+        m_paused = false;
+    }
+    else
+    {
+        disconnect(m_audio_lib, &AudioStreamingLibCore::veryOutputData, this, &MainWindow::writeToFile);
+
+        buttonrecord->setText("Record");
+
+        m_paused = true;
+    }
+}
+
+void MainWindow::stopRecord()
+{
+    if (m_audio_recorder)
+    {
+        disconnect(m_audio_lib, &AudioStreamingLibCore::veryOutputData, this, &MainWindow::writeToFile);
+        m_audio_recorder->deleteLater();
+    }
+
+    linerecordpath->setEnabled(true);
+    buttonsearch->setEnabled(true);
+    buttonrecord->setText("Record");
+    buttonrecordstop->setEnabled(false);
+
+    m_paused = true;
+
+    QTime time(0, 0, 0);
+    lcdtime->display(time.toString(Qt::ISODate));
+
+    m_format = QAudioFormat();
+}
+
+void MainWindow::resetRecordPage()
+{
+    buttonsearch->setText("...");
+    buttonrecord->setText("Record");
+    buttonrecordstop->setText("Stop record");
+
+    buttonrecord->setEnabled(false);
+    buttonrecordstop->setEnabled(false);
+
+    QTime time(0, 0, 0);
+    lcdtime->display(time.toString(Qt::ISODate));
+}
+
+void MainWindow::writeToFile(const QByteArray &data)
+{
+    m_audio_recorder->write(AudioStreamingLibCore::convertFloatToInt16(data));
+
+    qint64 recorded = AudioStreamingLibCore::sizeToTime(m_audio_recorder->size() - 44, m_format);
+
+    QTime time = QTime(0, 0, 0).addMSecs(recorded);
+
+    lcdtime->display(time.toString(Qt::ISODate));
 }
 
 void MainWindow::volumeChanged(int volume)
@@ -265,6 +428,8 @@ void MainWindow::disconnected(const QHostAddress &address)
 {
     Q_UNUSED(address)
 
+    resetRecordPage();
+
     if (m_audio_lib)
         m_audio_lib->stop();
 
@@ -275,6 +440,8 @@ void MainWindow::finished()
 {
     if (!isVisible())
         return;
+
+    resetRecordPage();
 
     buttonconnect->setText("Connect");
 

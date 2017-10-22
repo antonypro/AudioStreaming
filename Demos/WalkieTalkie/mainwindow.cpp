@@ -13,6 +13,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 
     connect(listwidgetpeers, &QListWidget::itemClicked, this, &MainWindow::selectPeer);
 
+    m_audio_recorder = nullptr;
+
+    m_paused = true;
+
     //Client
 
     comboboxaudioinput = new QComboBox(this);
@@ -74,11 +78,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     buttonstartserver = new QPushButton(this);
     buttonstartserver->setText("Start Server");
 
-    labelsamplesize = new QLabel(this);
-    labelsamplesize->setText("Sample size:");
-    linesamplesize = new QLineEdit(this);
-    linesamplesize->setText("16");
-
     labelsamplerate = new QLabel(this);
     labelsamplerate->setText("Sample rate:");
     linesamplerate = new QLineEdit(this);
@@ -87,7 +86,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     labelchannels = new QLabel(this);
     labelchannels->setText("Channels:");
     linechannels = new QLineEdit(this);
-    linechannels->setText("2");
+    linechannels->setText("1");
 
     labelbuffertime = new QLabel(this);
     labelbuffertime->setText("Buffer time (ms):");
@@ -119,14 +118,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
         layout->addWidget(lineserverid, 1, 1);
         layout->addWidget(labelserverpassword, 2, 0);
         layout->addWidget(lineserverpassword, 2, 1);
-        layout->addWidget(labelsamplesize, 3, 0);
-        layout->addWidget(linesamplesize, 3, 1);
-        layout->addWidget(labelsamplerate, 4, 0);
-        layout->addWidget(linesamplerate, 4, 1);
-        layout->addWidget(labelchannels, 5, 0);
-        layout->addWidget(linechannels, 5, 1);
-        layout->addWidget(labelbuffertime, 6, 0);
-        layout->addWidget(linebuffertime, 6, 1);
+        layout->addWidget(labelsamplerate, 3, 0);
+        layout->addWidget(linesamplerate, 3, 1);
+        layout->addWidget(labelchannels, 4, 0);
+        layout->addWidget(linechannels, 4, 1);
+        layout->addWidget(labelbuffertime, 5, 0);
+        layout->addWidget(linebuffertime, 5, 1);
     }
 
     //Volume
@@ -143,7 +140,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     scrollclientserver = new QScrollArea(this);
 #if !defined(Q_OS_ANDROID) && !defined(Q_OS_IOS) && !defined(Q_OS_WINPHONE)
     scrollclientserver->setWidgetResizable(true);
-    scrollclientserver->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scrollclientserver->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 #endif
 
     QWidget *widgetserverclient = new QWidget(this);
@@ -202,9 +199,26 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
         layout->addLayout(layout1, 1, 0);
     }
 
+    linerecordpath = new QLineEdit(this);
+    buttonsearch = new QPushButton(this);
+    buttonrecord = new QPushButton(this);
+    buttonrecordstop = new QPushButton(this);
+    lcdtime = new QLCDNumber(this);
+
+    QWidget *recorder = new QWidget(this);
+
+    QGridLayout *layout_record = new QGridLayout(recorder);
+    layout_record->addWidget(new QLabel("Wave file:", this), 0, 0);
+    layout_record->addWidget(linerecordpath, 0, 1);
+    layout_record->addWidget(buttonsearch, 0, 2);
+    layout_record->addWidget(buttonrecord, 0, 3);
+    layout_record->addWidget(buttonrecordstop, 0, 4);
+    layout_record->addWidget(lcdtime, 1, 0, 1, 5);
+
     tabwidget->addTab(scrollclientserver, "Client Server");
     tabwidget->addTab(listwidgetpeers, "Search");
     tabwidget->addTab(widgetchat, "Chat");
+    tabwidget->addTab(recorder, "Record");
     tabwidget->addTab(texteditsettings, "Settings");
 
     connect(tabwidget, &QTabWidget::currentChanged, this, &MainWindow::currentChanged);
@@ -221,6 +235,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 
     buttonsendchat->setEnabled(false);
     buttonsendchat->setDefault(true);
+
+    resetRecordPage();
 
     getDevInfo();
 
@@ -239,11 +255,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     mainlayout->addWidget(slidervolume, 2, 1, 1, 3);
     mainlayout->addWidget(leveloutput, 0, 4, 3, 1);
 
+    //Recorder
+    connect(buttonsearch, &QPushButton::clicked, this, &MainWindow::setRecordPath);
+    connect(buttonrecord, &QPushButton::clicked, this, &MainWindow::startPauseRecord);
+    connect(buttonrecordstop, &QPushButton::clicked, this, &MainWindow::stopRecord);
+
     slidervolume->setValue(100);
 
     setCentralWidget(mainwidget);
-
-    setFixedSize(sizeHint());
 }
 
 MainWindow::~MainWindow()
@@ -315,24 +334,30 @@ void MainWindow::client()
 {
     if (m_audio_lib)
     {
+        buttonrecord->setEnabled(false);
+
         m_audio_lib->stop();
         return;
     }
 
     m_audio_lib = new AudioStreamingLibCore(this);
 
-    connect(m_audio_lib, &AudioStreamingLibCore::destroyed, this, [this]{m_audio_lib = nullptr;});
+    connect(m_audio_lib, &AudioStreamingLibCore::destroyed, [=]{m_audio_lib = nullptr;});
 
     QByteArray password = lineclientpassword->text().toLatin1();
 
     QAudioDeviceInfo devinfo = comboboxaudioinput->itemData(comboboxaudioinput->currentIndex()).value<QAudioDeviceInfo>();
 
     StreamingInfo info;
+
     info.setInputDeviceInfo(devinfo);
     info.setWorkMode(StreamingInfo::StreamingWorkMode::WalkieTalkieClient);
     info.setSslEnabled(!password.isEmpty());
+    info.setGetAudioEnabled(true);
     info.setNegotiationString(QByteArray("WalkieTalkieTCPDemo"));
     info.setID(lineclientid->text().trimmed());
+
+    buttonrecord->setEnabled(true);
 
     connect(m_audio_lib, &AudioStreamingLibCore::error, this, &MainWindow::error);
 
@@ -371,31 +396,35 @@ void MainWindow::server()
 {
     if (m_audio_lib)
     {
+        buttonrecord->setEnabled(false);
+
         m_audio_lib->stop();
         return;
     }
 
     m_audio_lib = new AudioStreamingLibCore(this);
 
-    connect(m_audio_lib, &AudioStreamingLibCore::destroyed, this, [this]{m_audio_lib = nullptr;});
+    connect(m_audio_lib, &AudioStreamingLibCore::destroyed, [=]{m_audio_lib = nullptr;});
 
     QByteArray password = lineserverpassword->text().toLatin1();
 
     QAudioDeviceInfo devinfo = comboboxaudioinput->itemData(comboboxaudioinput->currentIndex()).value<QAudioDeviceInfo>();
 
     QAudioFormat format;
-    format.setSampleSize(linesamplesize->text().toInt());
+    format.setSampleSize(32);
     format.setSampleRate(linesamplerate->text().toInt());
     format.setChannelCount(linechannels->text().toInt());
-    format.setSampleType(QAudioFormat::SignedInt);
+    format.setSampleType(QAudioFormat::Float);
     format.setByteOrder(QAudioFormat::LittleEndian);
 
     StreamingInfo info;
+
     info.setInputAudioFormat(format);
     info.setInputDeviceInfo(devinfo);
     info.setWorkMode(StreamingInfo::StreamingWorkMode::WalkieTalkieServer);
     info.setTimeToBuffer(linebuffertime->text().toInt());
     info.setSslEnabled(!password.isEmpty());
+    info.setGetAudioEnabled(true);
     info.setNegotiationString(QByteArray("WalkieTalkieTCPDemo"));
     info.setID(lineserverid->text().trimmed());
 
@@ -404,6 +433,8 @@ void MainWindow::server()
 
     if (info.isSslEnabled())
         AudioStreamingLibCore::generateAsymmetricKeys(&private_key, &public_key);
+
+    buttonrecord->setEnabled(true);
 
     connect(m_audio_lib, &AudioStreamingLibCore::error, this, &MainWindow::error);
 
@@ -480,7 +511,6 @@ void MainWindow::serverStarted(bool enable)
     comboboxaudioinput->setEnabled(enable);
     widget1->setEnabled(enable);
     lineportserver->setEnabled(enable);
-    linesamplesize->setEnabled(enable);
     linesamplerate->setEnabled(enable);
     linechannels->setEnabled(enable);
     linebuffertime->setEnabled(enable);
@@ -573,7 +603,7 @@ void MainWindow::adjustSettings()
     str.append(QString("Sample size: %0 bits\n").arg(inputFormat.sampleSize()));
     str.append(QString("Sample rate: %0 hz\n").arg(inputFormat.sampleRate()));
     str.append(QString("Channels: %0\n").arg(inputFormat.channelCount()));
-    str.append(QString("Sample type: %0\n").arg((inputFormat.sampleType() == QAudioFormat::SignedInt) ? "Signed integer" : "Unsigned integer"));
+    str.append(QString("Sample type: %0\n").arg((inputFormat.sampleType() == QAudioFormat::Float) ? "Float" : "Integer"));
     str.append(QString("Byte order: %0\n").arg((inputFormat.byteOrder() == QAudioFormat::LittleEndian) ? "Little endian" : "Big endian"));
 
     str.append("\n");
@@ -583,12 +613,139 @@ void MainWindow::adjustSettings()
     str.append(QString("Sample size: %0 bits\n").arg(format.sampleSize()));
     str.append(QString("Sample rate: %0 hz\n").arg(format.sampleRate()));
     str.append(QString("Channels: %0\n").arg(format.channelCount()));
-    str.append(QString("Sample type: %0\n").arg((format.sampleType() == QAudioFormat::SignedInt) ? "Signed integer" : "Unsigned integer"));
+    str.append(QString("Sample type: %0\n").arg((format.sampleType() == QAudioFormat::Float) ? "Float" : "Integer"));
     str.append(QString("Byte order: %0\n").arg((format.byteOrder() == QAudioFormat::LittleEndian) ? "Little endian" : "Big endian"));
 
     str.append(QString("\nBuffer time: %0 ms").arg(m_audio_lib->streamingInfo().timeToBuffer()));
 
     texteditsettings->setPlainText(str);
+}
+
+void MainWindow::setRecordPath()
+{
+    QString path = QFileDialog::getSaveFileName(this, "Select the wave path", QString(), "WAVE (*.wav)");
+
+    if (path.isEmpty())
+        return;
+
+    linerecordpath->setText(QDir::toNativeSeparators(path));
+}
+
+void MainWindow::startPauseRecord()
+{
+    if (m_paused)
+    {
+        if (!m_audio_recorder)
+        {
+            linerecordpath->setEnabled(false);
+            buttonsearch->setEnabled(false);
+            buttonrecordstop->setEnabled(true);
+
+            m_format = m_audio_lib->audioFormat();
+            //Change to compatible settings
+            m_format.setSampleSize(16);
+            m_format.setSampleType(QAudioFormat::SignedInt);
+
+            m_audio_recorder = new AudioRecorder(linerecordpath->text(), m_format, m_audio_lib);
+
+            connect(m_audio_recorder, &AudioRecorder::destroyed, [=]{m_audio_recorder = nullptr;});
+
+            if (!m_audio_recorder->open())
+            {
+                stopRecord();
+                QMessageBox::critical(this, "Error", "Error openning file for record!");
+                return;
+            }
+        }
+
+        connect(m_audio_lib, &AudioStreamingLibCore::veryInputData, this, &MainWindow::writeLocalToBuffer);
+        connect(m_audio_lib, &AudioStreamingLibCore::veryOutputData, this, &MainWindow::writePeerToBuffer);
+
+        buttonrecord->setText("Pause");
+
+        m_paused = false;
+    }
+    else
+    {
+        disconnect(m_audio_lib, &AudioStreamingLibCore::veryInputData, this, &MainWindow::writeLocalToBuffer);
+        disconnect(m_audio_lib, &AudioStreamingLibCore::veryOutputData, this, &MainWindow::writePeerToBuffer);
+
+        buttonrecord->setText("Record");
+
+        m_paused = true;
+    }
+}
+
+void MainWindow::stopRecord()
+{
+    if (m_audio_recorder)
+    {
+        disconnect(m_audio_lib, &AudioStreamingLibCore::veryInputData, this, &MainWindow::writeLocalToBuffer);
+        disconnect(m_audio_lib, &AudioStreamingLibCore::veryOutputData, this, &MainWindow::writePeerToBuffer);
+
+        m_audio_recorder->deleteLater();
+    }
+
+    linerecordpath->setEnabled(true);
+    buttonsearch->setEnabled(true);
+    buttonrecord->setText("Record");
+    buttonrecordstop->setEnabled(false);
+
+    m_paused = true;
+
+    QTime time(0, 0, 0);
+    lcdtime->display(time.toString(Qt::ISODate));
+
+    m_format = QAudioFormat();
+}
+
+void MainWindow::resetRecordPage()
+{
+    buttonsearch->setText("...");
+    buttonrecord->setText("Record");
+    buttonrecordstop->setText("Stop record");
+
+    buttonrecord->setEnabled(false);
+    buttonrecordstop->setEnabled(false);
+
+    QTime time(0, 0, 0);
+    lcdtime->display(time.toString(Qt::ISODate));
+}
+
+void MainWindow::writeLocalToBuffer(const QByteArray &data)
+{
+    m_local_audio.append(data);
+
+    mixLocalPeer();
+}
+
+void MainWindow::writePeerToBuffer(const QByteArray &data)
+{
+    m_peer_audio.append(data);
+
+    mixLocalPeer();
+}
+
+void MainWindow::mixLocalPeer()
+{
+    int size = AudioStreamingLibCore::timeToSize(10, m_audio_lib->audioFormat());
+
+    while (m_local_audio.size() >= size && m_peer_audio.size() >= size)
+    {
+        QByteArray mixed = AudioStreamingLibCore::mixFloatAudio(m_local_audio.mid(0, size), m_peer_audio.mid(0, size));
+
+        m_local_audio.remove(0, size);
+
+        m_peer_audio.remove(0, size);
+
+        m_audio_recorder->write(AudioStreamingLibCore::convertFloatToInt16(mixed));
+
+        qint64 recorded = AudioStreamingLibCore::sizeToTime(m_audio_recorder->size() - 44, m_format);
+
+        QTime time = QTime(0, 0, 0).addMSecs(recorded);
+
+        lcdtime->display(time.toString(Qt::ISODate));
+    }
 }
 
 void MainWindow::writeText()
@@ -648,6 +805,9 @@ void MainWindow::finished()
 
     if (m_audio_lib)
         m_audio_lib->deleteLater();
+
+    m_local_audio.clear();
+    m_peer_audio.clear();
 
     setWindowTitle(TITLE);
 }

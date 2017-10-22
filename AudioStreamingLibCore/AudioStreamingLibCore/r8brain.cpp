@@ -11,6 +11,8 @@ r8brain::r8brain(QObject *parent) : QObject(parent)
     m_Resamps = nullptr;
     m_opp = nullptr;
     m_initalized = false;
+
+    START_THREAD
 }
 
 r8brain::~r8brain()
@@ -23,25 +25,20 @@ r8brain::~r8brain()
     delete[] m_opp;
 }
 
-void r8brain::start(int in_sample_rate, int out_sample_rate, int channels, int sample_size)
+void r8brain::startPrivate(int in_sample_rate, int out_sample_rate, int channels, int sample_size)
 {
     if (m_initalized)
         return;
 
     switch (sample_size)
     {
-    case 16:
-    {
-        m_bits = 16;
-        break;
-    }
     case 32:
     {
         m_bits = 32;
         break;
     }
     default:
-        emit error("Only 16 bits or 32 bits per sample are allowed!");
+        emit error("Only 32 bits per sample are allowed!");
         return;
     }
 
@@ -67,8 +64,17 @@ void r8brain::start(int in_sample_rate, int out_sample_rate, int channels, int s
     m_opp = new double*[m_channels_output];
 }
 
+void r8brain::start(int in_sample_rate, int out_sample_rate, int channels, int sample_size)
+{
+    QMetaObject::invokeMethod(this, "startPrivate", Qt::QueuedConnection,
+                              Q_ARG(int, in_sample_rate),
+                              Q_ARG(int, out_sample_rate),
+                              Q_ARG(int, channels),
+                              Q_ARG(int, sample_size));
+}
+
 //If more than two channels, down to two, and resample to OPUS_SAMPLE_RATE
-void r8brain::write(const QByteArray &input)
+void r8brain::writePrivate(const QByteArray &input)
 {
     if (!m_initalized)
         return;
@@ -77,113 +83,17 @@ void r8brain::write(const QByteArray &input)
 
     switch (m_bits)
     {
-    case 16:
-    {
-        if (input.size() % 2 != 0)
-        {
-            emit error("Corrupted audio data!");
-            return;
-        }
-
-        int min = std::numeric_limits<qint16>::min();
-        int max = std::numeric_limits<qint16>::max();
-
-        qint16 *samples = (qint16*)input.data();
-
-        int samplescount = input.size() / sizeof(qint16);
-
-        QByteArray downchanneldata;
-
-        switch (m_channels_input)
-        {
-        case 8:
-        {
-            for (int i = 0; i < samplescount; i += 8) {
-                int FL = samples[i + 0];
-                int FR = samples[i + 1];
-                int C = samples[i + 2];
-                int LFE = samples[i + 3]; // (sub-woofer)
-                int RL = samples[i + 4];
-                int RR = samples[i + 5];
-                int SL = samples[i + 6];
-                int SR = samples[i + 7];
-
-                qint16 L = qBound(min, qRound(FL / 5.0 + RL / 5.0 + SL / 5.0 + C / 5.0 + LFE / 5.0), max);
-                qint16 R = qBound(min, qRound(FR / 5.0 + RR / 5.0 + SR / 5.0 + C / 5.0 + LFE / 5.0), max);
-
-                downchanneldata.append((char*)&L, sizeof(qint16));
-                downchanneldata.append((char*)&R, sizeof(qint16));
-            }
-            break;
-        }
-        case 6:
-        {
-            for (int i = 0; i < samplescount; i += 6) {
-                int FL = samples[i + 0];
-                int FR = samples[i + 1];
-                int C = samples[i + 2];
-                int LFE = samples[i + 3]; // (sub-woofer)
-                int RL = samples[i + 4];
-                int RR = samples[i + 5];
-
-                qint16 L = qBound(min, qRound(FL / 4.0 + RL / 4.0 + C / 4.0 + LFE / 4.0), max);
-                qint16 R = qBound(min, qRound(FR / 4.0 + RR / 4.0 + C / 4.0 + LFE / 4.0), max);
-
-                downchanneldata.append((char*)&L, sizeof(qint16));
-                downchanneldata.append((char*)&R, sizeof(qint16));
-            }
-            break;
-        }
-        case 4:
-        {
-            for (int i = 0; i < samplescount; i += 4) {
-                int FL = samples[i + 0];
-                int FR = samples[i + 1];
-                int RL = samples[i + 2];
-                int RR = samples[i + 3];
-
-                qint16 L = qBound(min, qRound(FL / 2.0 + RL / 2.0), max);
-                qint16 R = qBound(min, qRound(FR / 2.0 + RR / 2.0), max);
-
-                downchanneldata.append((char*)&L, sizeof(qint16));
-                downchanneldata.append((char*)&R, sizeof(qint16));
-            }
-            break;
-        }
-        case 2:
-        case 1:
-        {
-            downchanneldata = input;
-            break;
-        }
-        default:
-            break;
-        }
-
-        qint16 *outputsamples = (qint16*)downchanneldata.data();
-
-        readCount = downchanneldata.size() / sizeof(qint16) / m_channels_output;
-
-        for (int j = 0; j < readCount; j++)
-            for (int i = 0; i < m_channels_output; i++)
-                m_InBufs[i][j] = (outputsamples[j * m_channels_output + i] / (double)max);
-
-        break;
-    }
     case 32:
     {
-        if (input.size() % 4 != 0)
+        if (input.size() % sizeof(float) != 0)
         {
             emit error("Corrupted input!");
             return;
         }
 
-        int min = std::numeric_limits<qint32>::min();
-        int max = std::numeric_limits<qint32>::max();
+        float *samples = (float*)input.data();
 
-        qint32 *samples = (qint32*)input.data();
-
-        int samplescount = input.size() / sizeof(qint32);
+        int samplescount = input.size() / sizeof(float);
 
         QByteArray downchanneldata;
 
@@ -191,56 +101,95 @@ void r8brain::write(const QByteArray &input)
         {
         case 8:
         {
-            for (int i = 0; i < samplescount; i += 8) {
-                int FL = samples[i + 0];
-                int FR = samples[i + 1];
-                int C = samples[i + 2];
-                int LFE = samples[i + 3]; // (sub-woofer)
-                int RL = samples[i + 4];
-                int RR = samples[i + 5];
-                int SL = samples[i + 6];
-                int SR = samples[i + 7];
+            Eigen::VectorXf FL(samplescount);
+            Eigen::VectorXf FR(samplescount);
+            Eigen::VectorXf C(samplescount);
+            Eigen::VectorXf LFE(samplescount); // (sub-woofer)
+            Eigen::VectorXf RL(samplescount);
+            Eigen::VectorXf RR(samplescount);
+            Eigen::VectorXf SL(samplescount);
+            Eigen::VectorXf SR(samplescount);
 
-                qint32 L = qBound(min, qRound(FL / 5.0 + RL / 5.0 + SL / 5.0 + C / 5.0 + LFE / 5.0), max);
-                qint32 R = qBound(min, qRound(FR / 5.0 + RR / 5.0 + SR / 5.0 + C / 5.0 + LFE / 5.0), max);
-
-                downchanneldata.append((char*)&L, sizeof(qint32));
-                downchanneldata.append((char*)&R, sizeof(qint32));
+            for (int i = 0; i < samplescount; i += m_channels_input)
+            {
+                FL[i] = samples[i + 0];
+                FR[i] = samples[i + 1];
+                C[i] = samples[i + 2];
+                LFE[i] = samples[i + 3]; // (sub-woofer)
+                RL[i] = samples[i + 4];
+                RR[i] = samples[i + 5];
+                SL[i] = samples[i + 6];
+                SR[i] = samples[i + 7];
             }
+
+            Eigen::VectorXf L = (FL / 5 + RL / 5 + SL / 5 + C / 5 + LFE / 5);
+            Eigen::VectorXf R = (FR / 5 + RR / 5 + SR / 5 + C / 5 + LFE / 5);
+
+            for (int i = 0; i < samplescount; i ++)
+            {
+                downchanneldata.append((char*)&L[i], sizeof(float));
+                downchanneldata.append((char*)&R[i], sizeof(float));
+            }
+
             break;
         }
         case 6:
         {
-            for (int i = 0; i < samplescount; i += 6) {
-                int FL = samples[i + 0];
-                int FR = samples[i + 1];
-                int C = samples[i + 2];
-                int LFE = samples[i + 3]; // (sub-woofer)
-                int RL = samples[i + 4];
-                int RR = samples[i + 5];
+            Eigen::VectorXf FL(samplescount);
+            Eigen::VectorXf FR(samplescount);
+            Eigen::VectorXf C(samplescount);
+            Eigen::VectorXf LFE(samplescount); // (sub-woofer)
+            Eigen::VectorXf RL(samplescount);
+            Eigen::VectorXf RR(samplescount);
 
-                qint32 L = qBound(min, qRound(FL / 4.0 + RL / 4.0 + C / 4.0 + LFE / 4.0), max);
-                qint32 R = qBound(min, qRound(FR / 4.0 + RR / 4.0 + C / 4.0 + LFE / 4.0), max);
-
-                downchanneldata.append((char*)&L, sizeof(qint32));
-                downchanneldata.append((char*)&R, sizeof(qint32));
+            for (int i = 0; i < samplescount; i += m_channels_input)
+            {
+                FL[i] = samples[i + 0];
+                FR[i] = samples[i + 1];
+                C[i] = samples[i + 2];
+                LFE[i] = samples[i + 3]; // (sub-woofer)
+                RL[i] = samples[i + 4];
+                RR[i] = samples[i + 5];
             }
+
+            Eigen::VectorXf L = (FL / 4 + RL / 4 + C / 4 + LFE / 4);
+            Eigen::VectorXf R = (FR / 4 + RR / 4 + C / 4 + LFE / 4);
+
+            downchanneldata.append((char*)&L, sizeof(float));
+            downchanneldata.append((char*)&R, sizeof(float));
+
+            for (int i = 0; i < samplescount; i ++)
+            {
+                downchanneldata.append((char*)&L[i], sizeof(float));
+                downchanneldata.append((char*)&R[i], sizeof(float));
+            }
+
             break;
         }
         case 4:
         {
-            for (int i = 0; i < samplescount; i += 4) {
-                int FL = samples[i + 0];
-                int FR = samples[i + 1];
-                int RL = samples[i + 2];
-                int RR = samples[i + 3];
+            Eigen::VectorXf FL(samplescount);
+            Eigen::VectorXf FR(samplescount);
+            Eigen::VectorXf RL(samplescount);
+            Eigen::VectorXf RR(samplescount);
 
-                qint32 L = qBound(min, qRound(FL / 2.0 + RL / 2.0), max);
-                qint32 R = qBound(min, qRound(FR / 2.0 + RR / 2.0), max);
-
-                downchanneldata.append((char*)&L, sizeof(qint32));
-                downchanneldata.append((char*)&R, sizeof(qint32));
+            for (int i = 0; i < samplescount; i += m_channels_input)
+            {
+                FL[i] = samples[i + 0];
+                FR[i] = samples[i + 1];
+                RL[i] = samples[i + 2];
+                RR[i] = samples[i + 3];
             }
+
+            Eigen::VectorXf L = (FL / 2 + RL / 2);
+            Eigen::VectorXf R = (FR / 2 + RR / 2);
+
+            for (int i = 0; i < samplescount; i ++)
+            {
+                downchanneldata.append((char*)&L[i], sizeof(float));
+                downchanneldata.append((char*)&R[i], sizeof(float));
+            }
+
             break;
         }
         case 2:
@@ -253,13 +202,13 @@ void r8brain::write(const QByteArray &input)
             break;
         }
 
-        qint32 *outputsamples = (qint32*)downchanneldata.data();
+        float *outputsamples = (float*)downchanneldata.data();
 
-        readCount = downchanneldata.size() / sizeof(qint32) / m_channels_output;
+        readCount = downchanneldata.size() / sizeof(float) / m_channels_output;
 
         for (int j = 0; j < readCount; j++)
             for (int i = 0; i < m_channels_output; i++)
-                m_InBufs[i][j] = (outputsamples[j * m_channels_output + i] / (double)max);
+                m_InBufs[i][j] = outputsamples[j * m_channels_output + i];
 
         break;
     }
@@ -271,23 +220,24 @@ void r8brain::write(const QByteArray &input)
     // after resampler. Same number for all channels.
 
     for (int i = 0; i < m_channels_output; i++)
-    {
         writeCount = m_Resamps[i]->process(m_InBufs[i], readCount, m_opp[i]);
-    }
 
     QByteArray data;
-
-    int min = std::numeric_limits<qint16>::min();
-    int max = std::numeric_limits<qint16>::max();
 
     for (int j = 0; j < writeCount; j++)
     {
         for (int i = 0; i < m_channels_output; i++)
         {
-            qint16 val = qBound(min, qRound(m_opp[i][j] * max), max);
-            data.append((char*)&val, sizeof(qint16));
+            float val = (float)(m_opp[i][j]);
+            data.append((char*)&val, sizeof(float));
         }
     }
 
     emit resampled(data);
+}
+
+void r8brain::write(const QByteArray &input)
+{
+    QMetaObject::invokeMethod(this, "writePrivate", Qt::QueuedConnection,
+                              Q_ARG(QByteArray, input));
 }

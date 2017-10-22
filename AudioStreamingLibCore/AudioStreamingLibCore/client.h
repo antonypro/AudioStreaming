@@ -7,7 +7,7 @@ class Client : public AbstractClient
 {
     Q_OBJECT
 public:
-    explicit Client(QObject *parent = 0);
+    explicit Client(QObject *parent = nullptr);
     ~Client();
 
 public slots:

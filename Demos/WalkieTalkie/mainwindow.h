@@ -6,13 +6,14 @@
 #include <QtWidgets>
 #include <AudioStreamingLibCore>
 #include "levelwidget.h"
+#include "audiorecorder.h"
 
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
 
 public:
-    MainWindow(QWidget *parent = 0);
+    MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
 signals:
@@ -32,6 +33,13 @@ private slots:
     void serverStarted(bool enable);
     void error(const QString &error);
     void adjustSettings();
+    void setRecordPath();
+    void startPauseRecord();
+    void stopRecord();
+    void resetRecordPage();
+    void writeLocalToBuffer(const QByteArray &data);
+    void writePeerToBuffer(const QByteArray &data);
+    void mixLocalPeer();
     void clientConnected(const QHostAddress &address, const QString &id);
     void serverConnected(const QHostAddress &address, const QString &id);
     void clientDisconnected();
@@ -66,8 +74,6 @@ private:
 
     QLabel *labelportserver;
     QLineEdit *lineportserver;
-    QLabel *labelsamplesize;
-    QLineEdit *linesamplesize;
     QLabel *labelsamplerate;
     QLineEdit *linesamplerate;
     QLabel *labelchannels;
@@ -99,6 +105,19 @@ private:
 
     QScrollArea *scrollclientserver;
     QWidget *widgetchat;
+
+    QLineEdit *linerecordpath;
+    QPushButton *buttonsearch;
+    QPushButton *buttonrecord;
+    QPushButton *buttonrecordstop;
+    QLCDNumber *lcdtime;
+
+    AudioRecorder *m_audio_recorder;
+    QAudioFormat m_format;
+    bool m_paused;
+
+    QByteArray m_local_audio;
+    QByteArray m_peer_audio;
 };
 
 #endif // MAINWINDOW_H

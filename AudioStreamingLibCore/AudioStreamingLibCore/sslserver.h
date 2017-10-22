@@ -8,7 +8,7 @@ class SslServer : public AbstractServer
 {
     Q_OBJECT
 public:
-    explicit SslServer(QObject *parent = 0);
+    explicit SslServer(QObject *parent = nullptr);
     ~SslServer();
 
 public slots:

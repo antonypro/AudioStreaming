@@ -8,7 +8,7 @@ class DiscoverClient : public QObject
 {
     Q_OBJECT
 public:
-    explicit DiscoverClient(QObject *parent = 0);
+    explicit DiscoverClient(QObject *parent = nullptr);
 
 signals:
     void peerFound(QHostAddress,QString);

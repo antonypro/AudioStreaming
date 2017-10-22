@@ -80,6 +80,9 @@ void AudioStreamingLibCore::stop()
 
         m_worker->deleteLater();
 
+        m_audio_format = QAudioFormat();
+        m_input_format = QAudioFormat();
+
         QThread::msleep(100);
 
         finishedPrivate();
@@ -101,7 +104,61 @@ bool AudioStreamingLibCore::generateAsymmetricKeys(QByteArray *private_key, QByt
     return OpenSslLib::generateKeys((SecureByteArray*)private_key, (SecureByteArray*)public_key);
 }
 
-bool AudioStreamingLibCore::isRunning() const
+qint64 AudioStreamingLibCore::timeToSize(qint64 ms_time, int channel_count, int sample_size, int sample_rate)
+{
+    return ::timeToSize(ms_time, channel_count, sample_size, sample_rate);
+}
+
+qint64 AudioStreamingLibCore::timeToSize(qint64 ms_time, const QAudioFormat &format)
+{
+    return ::timeToSize(ms_time, format);
+}
+
+qint64 AudioStreamingLibCore::sizeToTime(qint64 bytes, int channel_count, int sample_size, int sample_rate)
+{
+    return ::sizeToTime(bytes, channel_count, sample_size, sample_rate);
+}
+
+qint64 AudioStreamingLibCore::sizeToTime(qint64 bytes, const QAudioFormat &format)
+{
+    return ::sizeToTime(bytes, format);
+}
+
+QByteArray AudioStreamingLibCore::convertFloatToInt16(const QByteArray &data)
+{
+    QAudioFormat format;
+    format.setSampleSize(16);
+    format.setSampleType(QAudioFormat::SignedInt);
+
+    return convertSamplesToInt(data, format);
+}
+
+QByteArray AudioStreamingLibCore::convertInt16ToFloat(const QByteArray &data)
+{
+    QAudioFormat format;
+    format.setSampleSize(16);
+    format.setSampleType(QAudioFormat::SignedInt);
+
+    return convertSamplesToFloat(data, format);
+}
+
+QByteArray AudioStreamingLibCore::mixFloatAudio(const QByteArray &data1, const QByteArray &data2)
+{
+    if (data1.isEmpty() || data2.isEmpty())
+        return QByteArray();
+
+    if (data1.size() != data2.size())
+        return QByteArray();
+
+    Eigen::Ref<Eigen::VectorXf> samples_float_1 = Eigen::Map<Eigen::VectorXf>((float*)data1.data(), data1.size() / sizeof(float));
+    Eigen::Ref<Eigen::VectorXf> samples_float_2 = Eigen::Map<Eigen::VectorXf>((float*)data2.data(), data2.size() / sizeof(float));
+
+    Eigen::VectorXf samples_mixed = samples_float_1 * 0.5f + samples_float_2 * 0.5f;
+
+    return QByteArray((char*)samples_mixed.data(), samples_mixed.size() * sizeof(float));
+}
+
+bool AudioStreamingLibCore::isRunning()
 {
     return RUNNING;
 }
@@ -193,7 +250,7 @@ void AudioStreamingLibCore::outputDataBack(const QByteArray &data)
     QMetaObject::invokeMethod(m_worker, "outputDataBack", Qt::QueuedConnection, Q_ARG(QByteArray, data));
 }
 
-bool AudioStreamingLibCore::isInputMuted() const
+bool AudioStreamingLibCore::isInputMuted()
 {
     if (!RUNNING)
         return false;
@@ -213,7 +270,7 @@ void AudioStreamingLibCore::setInputMuted(bool mute)
     QMetaObject::invokeMethod(m_worker, "setInputMuted", Qt::QueuedConnection, Q_ARG(bool, m_input_muted));
 }
 
-int AudioStreamingLibCore::volume() const
+int AudioStreamingLibCore::volume()
 {
     if (!RUNNING)
         return 0;
@@ -233,7 +290,7 @@ void AudioStreamingLibCore::setVolume(int volume)
     QMetaObject::invokeMethod(m_worker, "setVolume", Qt::QueuedConnection, Q_ARG(int, m_volume));
 }
 
-StreamingInfo AudioStreamingLibCore::streamingInfo() const
+StreamingInfo AudioStreamingLibCore::streamingInfo()
 {
     if (!RUNNING)
         return StreamingInfo();
@@ -243,7 +300,7 @@ StreamingInfo AudioStreamingLibCore::streamingInfo() const
     return streaming_info;
 }
 
-QList<QHostAddress> AudioStreamingLibCore::connectionsList() const
+QList<QHostAddress> AudioStreamingLibCore::connectionsList()
 {
     if (!RUNNING)
         return QList<QHostAddress>();
@@ -253,7 +310,7 @@ QList<QHostAddress> AudioStreamingLibCore::connectionsList() const
     return connections;
 }
 
-bool AudioStreamingLibCore::isReadyToWriteExtraData() const
+bool AudioStreamingLibCore::isReadyToWriteExtraData()
 {
     if (!RUNNING)
         return false;
@@ -263,27 +320,37 @@ bool AudioStreamingLibCore::isReadyToWriteExtraData() const
     return isReady;
 }
 
-QAudioFormat AudioStreamingLibCore::audioFormat() const
+QAudioFormat AudioStreamingLibCore::audioFormat()
 {
     if (!RUNNING)
         return QAudioFormat();
 
+    if (m_audio_format.isValid())
+        return m_audio_format;
+
     StreamingInfo streaming_info;
     QMetaObject::invokeMethod(m_worker, "streamingInfo", Qt::BlockingQueuedConnection, Q_RETURN_ARG(StreamingInfo, streaming_info));
-    return streaming_info.audioFormat();
+    m_audio_format = streaming_info.audioFormat();
+
+    return m_audio_format;
 }
 
-QAudioFormat AudioStreamingLibCore::inputAudioFormat() const
+QAudioFormat AudioStreamingLibCore::inputAudioFormat()
 {
     if (!RUNNING)
         return QAudioFormat();
 
+    if (m_input_format.isValid())
+        return m_input_format;
+
     StreamingInfo streaming_info;
     QMetaObject::invokeMethod(m_worker, "streamingInfo", Qt::BlockingQueuedConnection, Q_RETURN_ARG(StreamingInfo, streaming_info));
-    return streaming_info.inputAudioFormat();
+    m_input_format = streaming_info.inputAudioFormat();
+
+    return m_input_format;
 }
 
-QDataStream &operator<<(QDataStream &stream, const StreamingInfo &info)
+QDataStream &operator<<(QDataStream &stream, StreamingInfo &info)
 {
     stream << info.negotiationString();
 
@@ -423,4 +490,86 @@ QDataStream &operator>>(QDataStream &stream, StreamingInfo &info)
     info.setSslEnabled(isSslEnabled);
 
     return stream;
+}
+
+QDebug operator<<(QDebug debug, StreamingInfo info)
+{
+    debug << "Negotiation string:" << qPrintable(info.negotiationString().trimmed()) << endl;
+
+    debug << "ID:" << qPrintable(info.ID().trimmed()) << endl;
+
+    debug << "Streaming work mode:";
+
+    switch (info.workMode())
+    {
+    case StreamingInfo::StreamingWorkMode::Undefined:
+        debug << "Undefined" << endl;
+        break;
+    case StreamingInfo::StreamingWorkMode::BroadcastClient:
+        debug << "BroadcastClient" << endl;
+        break;
+    case StreamingInfo::StreamingWorkMode::BroadcastServer:
+        debug << "BroadcastServer" << endl;
+        break;
+    case StreamingInfo::StreamingWorkMode::WalkieTalkieClient:
+        debug << "WalkieTalkieClient" << endl;
+        break;
+    case StreamingInfo::StreamingWorkMode::WalkieTalkieServer:
+        debug << "WalkieTalkieServer" << endl;
+        break;
+    default:
+        break;
+    }
+
+    debug << "Time to buffer:" << info.timeToBuffer() << "ms" << endl;
+
+    debug << "Input device type:";
+
+    switch (info.inputDeviceType())
+    {
+    case StreamingInfo::AudioDeviceType::LibraryAudioDevice:
+        debug << "LibraryAudioDevice" << endl;
+        break;
+    case StreamingInfo::AudioDeviceType::CustomAudioDevice:
+        debug << "CustomAudioDevice" << endl;
+        break;
+    default:
+        break;
+    }
+
+    debug << "Output device type:";
+
+    switch (info.outputDeviceType())
+    {
+    case StreamingInfo::AudioDeviceType::LibraryAudioDevice:
+        debug << "LibraryAudioDevice" << endl;
+        break;
+    case StreamingInfo::AudioDeviceType::CustomAudioDevice:
+        debug << "CustomAudioDevice" << endl;
+        break;
+    default:
+        break;
+    }
+
+    debug << "Input audio format:" << info.inputAudioFormat() << endl;
+
+    debug << "Resampled audio format:" << info.audioFormat() << endl;
+
+    debug << "Input device name:" << qPrintable(info.inputDeviceInfo().deviceName()) << endl;
+
+    debug << "Output device name:" << qPrintable(info.outputDeviceInfo().deviceName()) << endl;
+
+#ifdef OPUS
+    debug << "Opus bitrate:" << info.OpusBitrate() << endl;
+#else
+    debug << "Opus bitrate:" << "N/A" << endl;
+#endif
+
+    debug << "Call back enabled:" << info.isCallBackEnabled() << endl;
+
+    debug << "Get audio enabled:" << info.isGetAudioEnabled() << endl;
+
+    debug << "Ssl enabled:" << info.isSslEnabled() << endl;
+
+    return debug;
 }

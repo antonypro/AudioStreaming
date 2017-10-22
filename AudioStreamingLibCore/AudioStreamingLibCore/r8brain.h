@@ -13,7 +13,7 @@ class r8brain : public QObject
 {
     Q_OBJECT
 public:
-    explicit r8brain(QObject *parent = 0);
+    explicit r8brain(QObject *parent = nullptr);
     ~r8brain();
 
 signals:
@@ -23,6 +23,10 @@ signals:
 public slots:
     void start(int in_sample_rate, int out_sample_rate, int channels, int sample_size);
     void write(const QByteArray &input);
+
+private slots:
+    void startPrivate(int in_sample_rate, int out_sample_rate, int channels, int sample_size);
+    void writePrivate(const QByteArray &input);
 
 private:
     int m_bits;

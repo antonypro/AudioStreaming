@@ -8,7 +8,7 @@ Cross platform audio streaming and VoIP library for local networks.
 * Audio can be compressed using Opus codec.
 * Audio can be buffered to reduce the occurrence of buffer underflow in the client side.
 * Can work on Broadcast or Walkie Talkie modes.
-* Supports Windows Linux and Android.
+* Can be compiled targeting any Qt5 supported platform.
 * Low latency modes are supported.
 
 ### Needed:
@@ -17,7 +17,7 @@ Qt 5.x
 
 C++11 compiler.
 
-You can choose to compress audio with Opus codec or not. If choose to compress you'll need to compile [Opus](https://www.opus-codec.org/) to your targets(Windows, Linux or Android). To compile Opus for android see the opus-android README, and need to download [r8brain](https://github.com/avaneev/r8brain-free-src)
+You can choose to compress audio with Opus codec or not. If choose to compress you'll need to compile [Opus](https://www.opus-codec.org/) to your targets(Windows, Linux, macOS or Android). To compile Opus for android see the opus-android README, and need to download [r8brain](https://github.com/avaneev/r8brain-free-src)
 
 If you want to static link [OpenSsl](https://www.openssl.org/),(independently if generating a shared or static library) just compile OpenSsl to fit your needs.
 
@@ -32,7 +32,7 @@ If you want to use Opus edit AudioStreamingLibSettings.pri setting `OPUS_ENABLED
 The same applies to OpenSsl, if you want to static link OpenSsl set `OPENSSL_ENABLED = TRUE`.(Please not that even if OpenSsl won't be statically linked it may be available through dynamic linking at runtime.)
 With the appropriated version of OpenSsl compiled just set the include folder and the libraries location of OpenSsl in AudioStreamingLibSettings.pri.
 
-With the appropriate settings set (using Opus or not, static linking OpenSsl or not) build the buildlib.pro, if it's  already built and you are changing settings remember to re-run qmake and rebuild.
+With the appropriate settings set (using Opus or not, static linking OpenSsl or not) build the buildlib.pro, if it's already built and you are changing settings remember to re-run qmake and rebuild.
 
 ### Using the library:
 
@@ -44,3 +44,12 @@ This project comes with demos of usage, just build and test them.
 
 For more information of how to use the APIs, see the Wiki.
 
+### Third party libraries:
+
+[Eigen](http://eigen.tuxfamily.org/)
+
+[Opus](http://opus-codec.org/)
+
+[OpenSsl](https://www.openssl.org/)
+
+[Kiss FFT](http://kissfft.sourceforge.net/)

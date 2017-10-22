@@ -2,10 +2,12 @@
 
 #define INVALID_FORMAT\
     (m_streaming_info.inputAudioFormat().isValid() &&\
-    (m_streaming_info.inputAudioFormat().sampleType() != QAudioFormat::SignedInt ||\
+    (m_streaming_info.inputAudioFormat().sampleType() != QAudioFormat::Float ||\
+    m_streaming_info.inputAudioFormat().sampleSize() != 32 ||\
     m_streaming_info.inputAudioFormat().byteOrder() != QAudioFormat::LittleEndian)) ||\
     (m_streaming_info.audioFormat().isValid() &&\
-    (m_streaming_info.audioFormat().sampleType() != QAudioFormat::SignedInt ||\
+    (m_streaming_info.audioFormat().sampleType() != QAudioFormat::Float ||\
+    m_streaming_info.audioFormat().sampleSize() != 32 ||\
     m_streaming_info.audioFormat().byteOrder() != QAudioFormat::LittleEndian))
 
 Worker::Worker(QObject *parent) : QObject(parent)
@@ -67,16 +69,9 @@ void Worker::start(const StreamingInfo &streaming_info)
 #ifdef OPUS
         m_opus_dec = new OpusDecoderClass();
         {
-            QThread *thread = new QThread();
-            m_opus_dec->moveToThread(thread);
-
             connect(this, &Worker::destroyed, m_opus_dec, &OpusDecoderClass::deleteLater);
-            connect(m_opus_dec, &OpusDecoderClass::destroyed, thread, &QThread::quit);
-            connect(thread, &QThread::finished, thread, &QThread::deleteLater);
 
             connect(m_opus_dec, &OpusDecoderClass::decoded, this, &Worker::posProcessedOutput);
-
-            thread->start();
         }
         connect(m_opus_dec, &OpusDecoderClass::error, this, &Worker::errorPrivate);
 #endif
@@ -93,26 +88,20 @@ void Worker::start(const StreamingInfo &streaming_info)
         if (m_streaming_info.outputDeviceType() == StreamingInfo::AudioDeviceType::LibraryAudioDevice)
         {
             m_audio_output = new AudioOutput();
-            QThread *thread = new QThread();
-            m_audio_output->moveToThread(thread);
-
             if (m_streaming_info.isGetAudioEnabled())
                 connect(m_audio_output, &AudioOutput::veryOutputData, this, &Worker::veryOutputData);
 
             connect(this, &Worker::destroyed, m_audio_output, &AudioOutput::deleteLater);
-            connect(m_audio_output, &AudioOutput::destroyed, thread, &QThread::quit);
-            connect(thread, &QThread::finished, thread, &QThread::deleteLater);
 
             connect(m_audio_output, &AudioOutput::error, this, &Worker::errorPrivate);
             connect(m_audio_output, &AudioOutput::currentlevel, this, &Worker::outputLevel);
 
-            QMetaObject::invokeMethod(m_audio_output, "setVolume", Qt::QueuedConnection, Q_ARG(int, m_volume));
-
-            thread->start();
+            m_audio_output->setVolume(m_volume);
         }
         else //used to compute level if not using the library output device
         {
-            m_level_meter_output = new LevelMeter(this);
+            m_level_meter_output = new LevelMeter();
+            connect(this, &Worker::destroyed, m_level_meter_output, &LevelMeter::deleteLater);
             connect(m_level_meter_output, &LevelMeter::currentlevel, this, &Worker::outputLevel);
         }
 
@@ -126,32 +115,18 @@ void Worker::start(const StreamingInfo &streaming_info)
         m_resampler = new r8brain();
         m_opus_enc = new OpusEncoderClass();
         {
-            QThread *thread = new QThread();
-            m_resampler->moveToThread(thread);
-
             connect(this, &Worker::destroyed, m_resampler, &r8brain::deleteLater);
-            connect(m_resampler, &r8brain::destroyed, thread, &QThread::quit);
-            connect(thread, &QThread::finished, thread, &QThread::deleteLater);
 
             connect(m_resampler, &r8brain::error, this, &Worker::errorPrivate);
             connect(m_resampler, &r8brain::resampled, m_opus_enc, &OpusEncoderClass::write);
 
             if (m_streaming_info.isGetAudioEnabled())
                 connect(m_resampler, &r8brain::resampled, this, &Worker::veryInputData);
-
-            thread->start();
         }
         {
-            QThread *thread = new QThread();
-            m_opus_enc->moveToThread(thread);
-
             connect(this, &Worker::destroyed, m_opus_enc, &OpusEncoderClass::deleteLater);
-            connect(m_opus_enc, &OpusEncoderClass::destroyed, thread, &QThread::quit);
-            connect(thread, &QThread::finished, thread, &QThread::deleteLater);
 
             connect(m_opus_enc, &OpusEncoderClass::encoded, this, &Worker::posProcessedInput);
-
-            thread->start();
         }
         connect(m_opus_enc, &OpusEncoderClass::error, this, &Worker::errorPrivate);
 #endif
@@ -171,12 +146,7 @@ void Worker::start(const StreamingInfo &streaming_info)
         if (m_streaming_info.inputDeviceType() == StreamingInfo::AudioDeviceType::LibraryAudioDevice)
         {
             m_audio_input = new AudioInput();
-            QThread *thread = new QThread();
-            m_audio_input->moveToThread(thread);
-
             connect(this, &Worker::destroyed, m_audio_input, &AudioInput::deleteLater);
-            connect(m_audio_input, &AudioInput::destroyed, thread, &QThread::quit);
-            connect(thread, &QThread::finished, thread, &QThread::deleteLater);
 
             connect(m_audio_input, &AudioInput::error, this, &Worker::errorPrivate);
 
@@ -185,11 +155,7 @@ void Worker::start(const StreamingInfo &streaming_info)
             else
                 connect(m_audio_input, &AudioInput::readyRead, this, &Worker::inputDataBack);
 
-            QMetaObject::invokeMethod(m_audio_input, "start", Qt::QueuedConnection,
-                                      Q_ARG(QAudioDeviceInfo, m_streaming_info.inputDeviceInfo()),
-                                      Q_ARG(QAudioFormat, m_streaming_info.inputAudioFormat()));
-
-            thread->start();
+            m_audio_input->start(m_streaming_info.inputDeviceInfo(), m_streaming_info.inputAudioFormat());
         }
         else
         {
@@ -203,7 +169,8 @@ void Worker::start(const StreamingInfo &streaming_info)
 
         adjustSettingsPrivate(true, false, false);
 
-        m_level_meter_input = new LevelMeter(this);
+        m_level_meter_input = new LevelMeter();
+        connect(this, &Worker::destroyed, m_level_meter_input, &LevelMeter::deleteLater);
         connect(m_level_meter_input, &LevelMeter::currentlevel, this, &Worker::inputLevel);
         m_level_meter_input->start(m_streaming_info.inputAudioFormat());
 
@@ -222,55 +189,30 @@ void Worker::start(const StreamingInfo &streaming_info)
         connect(m_opus_enc, &OpusEncoderClass::error, this, &Worker::errorPrivate);
         connect(m_opus_dec, &OpusDecoderClass::error, this, &Worker::errorPrivate);
         {
-            QThread *thread = new QThread();
-            m_resampler->moveToThread(thread);
-
             connect(this, &Worker::destroyed, m_resampler, &r8brain::deleteLater);
-            connect(m_resampler, &r8brain::destroyed, thread, &QThread::quit);
-            connect(thread, &QThread::finished, thread, &QThread::deleteLater);
 
             connect(m_resampler, &r8brain::error, this, &Worker::errorPrivate);
             connect(m_resampler, &r8brain::resampled, m_opus_enc, &OpusEncoderClass::write);
 
             if (m_streaming_info.isGetAudioEnabled())
                 connect(m_resampler, &r8brain::resampled, this, &Worker::veryInputData);
-
-            thread->start();
         }
         {
-            QThread *thread = new QThread();
-            m_opus_enc->moveToThread(thread);
-
             connect(this, &Worker::destroyed, m_opus_enc, &OpusEncoderClass::deleteLater);
-            connect(m_opus_enc, &OpusEncoderClass::destroyed, thread, &QThread::quit);
-            connect(thread, &QThread::finished, thread, &QThread::deleteLater);
 
             connect(m_opus_enc, &OpusEncoderClass::encoded, this, &Worker::posProcessedInput);
-
-            thread->start();
         }
         {
-            QThread *thread = new QThread();
-            m_opus_dec->moveToThread(thread);
-
             connect(this, &Worker::destroyed, m_opus_dec, &OpusDecoderClass::deleteLater);
-            connect(m_opus_dec, &OpusDecoderClass::destroyed, thread, &QThread::quit);
-            connect(thread, &QThread::finished, thread, &QThread::deleteLater);
 
             connect(m_opus_dec, &OpusDecoderClass::decoded, this, &Worker::posProcessedOutput);
-
-            thread->start();
         }
 #endif
         if (m_streaming_info.inputDeviceType() == StreamingInfo::AudioDeviceType::LibraryAudioDevice)
         {
             m_audio_input = new AudioInput();
-            QThread *thread = new QThread();
-            m_audio_input->moveToThread(thread);
 
             connect(this, &Worker::destroyed, m_audio_input, &AudioInput::deleteLater);
-            connect(m_audio_input, &AudioInput::destroyed, thread, &QThread::quit);
-            connect(thread, &QThread::finished, thread, &QThread::deleteLater);
 
             connect(m_audio_input, &AudioInput::error, this, &Worker::errorPrivate);
 
@@ -283,16 +225,13 @@ void Worker::start(const StreamingInfo &streaming_info)
             {
                 adjustSettingsPrivate(true, true, false);
 
-                m_level_meter_input = new LevelMeter(this);
+                m_level_meter_input = new LevelMeter();
+                connect(this, &Worker::destroyed, m_level_meter_input, &LevelMeter::deleteLater);
                 connect(m_level_meter_input, &LevelMeter::currentlevel, this, &Worker::inputLevel);
                 m_level_meter_input->start(m_streaming_info.inputAudioFormat());
 
-                QMetaObject::invokeMethod(m_audio_input, "start", Qt::QueuedConnection,
-                                          Q_ARG(QAudioDeviceInfo, m_streaming_info.inputDeviceInfo()),
-                                          Q_ARG(QAudioFormat, m_streaming_info.inputAudioFormat()));
+                m_audio_input->start(m_streaming_info.inputDeviceInfo(), m_streaming_info.inputAudioFormat());
             }
-
-            thread->start();
         }
         else //used to compute level if not using the library input device
         {
@@ -306,7 +245,8 @@ void Worker::start(const StreamingInfo &streaming_info)
 
                 adjustSettingsPrivate(true, true, false);
 
-                m_level_meter_input = new LevelMeter(this);
+                m_level_meter_input = new LevelMeter();
+                connect(this, &Worker::destroyed, m_level_meter_input, &LevelMeter::deleteLater);
                 connect(m_level_meter_input, &LevelMeter::currentlevel, this, &Worker::inputLevel);
                 m_level_meter_input->start(m_streaming_info.inputAudioFormat());
 
@@ -319,15 +259,11 @@ void Worker::start(const StreamingInfo &streaming_info)
         if (m_streaming_info.outputDeviceType() == StreamingInfo::AudioDeviceType::LibraryAudioDevice)
         {
             m_audio_output = new AudioOutput();
-            QThread *thread = new QThread();
-            m_audio_output->moveToThread(thread);
 
             if (m_streaming_info.isGetAudioEnabled())
                 connect(m_audio_output, &AudioOutput::veryOutputData, this, &Worker::veryOutputData);
 
             connect(this, &Worker::destroyed, m_audio_output, &AudioOutput::deleteLater);
-            connect(m_audio_output, &AudioOutput::destroyed, thread, &QThread::quit);
-            connect(thread, &QThread::finished, thread, &QThread::deleteLater);
 
             connect(m_audio_output, &AudioOutput::error, this, &Worker::errorPrivate);
             connect(m_audio_output, &AudioOutput::currentlevel, this, &Worker::outputLevel);
@@ -336,19 +272,17 @@ void Worker::start(const StreamingInfo &streaming_info)
             {
                 QAudioFormat format = m_streaming_info.audioFormat();
 
-                QMetaObject::invokeMethod(m_audio_output, "start", Qt::QueuedConnection,
-                                          Q_ARG(QAudioDeviceInfo, m_streaming_info.outputDeviceInfo()),
-                                          Q_ARG(QAudioFormat, format), Q_ARG(int, m_streaming_info.timeToBuffer()),
-                                          Q_ARG(bool, m_streaming_info.isGetAudioEnabled()));
+                m_audio_output->start(m_streaming_info.outputDeviceInfo(),
+                                      format, m_streaming_info.timeToBuffer(),
+                                      m_streaming_info.isGetAudioEnabled());
             }
 
-            QMetaObject::invokeMethod(m_audio_output, "setVolume", Qt::QueuedConnection, Q_ARG(int, m_volume));
-
-            thread->start();
+            m_audio_output->setVolume(m_volume);
         }
         else //used to compute level if not using the library output device
         {
-            m_level_meter_output = new LevelMeter(this);
+            m_level_meter_output = new LevelMeter();
+            connect(this, &Worker::destroyed, m_level_meter_output, &LevelMeter::deleteLater);
             connect(m_level_meter_output, &LevelMeter::currentlevel, this, &Worker::outputLevel);
 
             if (m_streaming_info.workMode() == StreamingInfo::StreamingWorkMode::WalkieTalkieServer)
@@ -491,18 +425,16 @@ void Worker::startOpusEncoder()
     QAudioFormat inputAudioFormat = m_streaming_info.inputAudioFormat();
     QAudioFormat audioFormat = m_streaming_info.audioFormat();
 
-    QMetaObject::invokeMethod(m_resampler, "start", Qt::QueuedConnection,
-                              Q_ARG(int, inputAudioFormat.sampleRate()),
-                              Q_ARG(int, audioFormat.sampleRate()),
-                              Q_ARG(int, inputAudioFormat.channelCount()),
-                              Q_ARG(int, inputAudioFormat.sampleSize()));
+    m_resampler->start(inputAudioFormat.sampleRate(),
+                       audioFormat.sampleRate(),
+                       inputAudioFormat.channelCount(),
+                       inputAudioFormat.sampleSize());
 
-    QMetaObject::invokeMethod(m_opus_enc, "start", Qt::QueuedConnection,
-                              Q_ARG(int, audioFormat.sampleRate()),
-                              Q_ARG(int, audioFormat.channelCount()),
-                              Q_ARG(int, m_bitrate),
-                              Q_ARG(int, m_frame_size),
-                              Q_ARG(int, application));
+    m_opus_enc->start(audioFormat.sampleRate(),
+                      audioFormat.channelCount(),
+                      m_bitrate,
+                      m_frame_size,
+                      application);
 #endif
 }
 
@@ -511,11 +443,10 @@ void Worker::startOpusDecoder()
 #ifdef OPUS
     QAudioFormat format = m_streaming_info.audioFormat();
 
-    QMetaObject::invokeMethod(m_opus_dec, "start", Qt::QueuedConnection,
-                              Q_ARG(int, format.sampleRate()),
-                              Q_ARG(int, format.channelCount()),
-                              Q_ARG(int, m_frame_size),
-                              Q_ARG(int, m_max_frame_size));
+    m_opus_dec->start(format.sampleRate(),
+                      format.channelCount(),
+                      m_frame_size,
+                      m_max_frame_size);
 #endif
 }
 
@@ -564,7 +495,6 @@ void Worker::adjustSettingsPrivate(bool start_opus_encoder, bool start_opus_deco
 
         format.setSampleRate(opus_sample_rate);
         format.setChannelCount(qMin(format.channelCount(), 2));
-        format.setSampleSize(16);
 
         m_bitrate = m_streaming_info.OpusBitrate();
 
@@ -723,26 +653,29 @@ void Worker::writeExtraDataResult()
 //and encode audio if using with Opus codec
 void Worker::inputDataBack(const QByteArray &data)
 {
-    if (data.size() % (m_streaming_info.inputAudioFormat().sampleSize() / 8) != 0)
+    if (data.size() % sizeof(float) != 0)
     {
         errorPrivate("Corrupted audio data!");
         return;
     }
 
-    QByteArray m_data = data;
+    QByteArray middle = data;
 
-    if (m_input_muted)
-        m_data.fill((char)0);
+    if (m_input_muted && !middle.isEmpty())
+    {
+        Eigen::Ref<Eigen::VectorXf> samples = Eigen::Map<Eigen::VectorXf>((float*)middle.data(), middle.size() / sizeof(float));
+        samples.fill(0);
+    }
 
     if (m_level_meter_input)
-        m_level_meter_input->write(m_data);
+        m_level_meter_input->write(middle);
 
 #ifdef OPUS
-    QMetaObject::invokeMethod(m_resampler, "write", Qt::QueuedConnection, Q_ARG(QByteArray, m_data));
+    m_resampler->write(middle);
 #else
     if (m_streaming_info.isGetAudioEnabled())
-        emit veryInputData(m_data);
-    posProcessedInput(m_data);
+        emit veryInputData(middle);
+    posProcessedInput(middle);
 #endif
 }
 
@@ -786,7 +719,7 @@ void Worker::posProcessedInput(const QByteArray &data)
 void Worker::preProcessOutput(const QByteArray &data)
 {
 #ifdef OPUS
-    QMetaObject::invokeMethod(m_opus_dec, "write", Qt::QueuedConnection, Q_ARG(QByteArray, data));
+    m_opus_dec->write(data);
 #else
     posProcessedOutput(data);
 #endif
@@ -806,20 +739,26 @@ void Worker::posProcessedOutput(const QByteArray &data)
 //Send callback output data to the output device
 void Worker::outputDataBack(const QByteArray &data)
 {
-    if (data.size() % (m_streaming_info.inputAudioFormat().sampleSize() / 8) != 0)
+    if (data.size() % sizeof(float) != 0)
     {
         errorPrivate("Corrupted audio data!");
         return;
     }
 
     if (m_audio_output)
-        QMetaObject::invokeMethod(m_audio_output, "write", Qt::QueuedConnection, Q_ARG(QByteArray, data));
+        m_audio_output->write(data);
 }
 
 //Convert flow control bytes to pseudo audio data
 void Worker::flowControl(int bytes)
 {
     QByteArray data = QByteArray(bytes, (char)0);
+
+    if (!data.isEmpty())
+    {
+        Eigen::Ref<Eigen::VectorXf> samples = Eigen::Map<Eigen::VectorXf>((float*)data.data(), data.size() / sizeof(float));
+        samples.fill(0);
+    }
 
     if (m_callback_enabled)
         emit inputData(data);
@@ -847,7 +786,7 @@ void Worker::setVolume(int volume)
     m_volume = volume;
 
     if (m_audio_output)
-        QMetaObject::invokeMethod(m_audio_output, "setVolume", Qt::QueuedConnection, Q_ARG(int, m_volume));
+        m_audio_output->setVolume(m_volume);
 }
 
 StreamingInfo Worker::streamingInfo() const
@@ -1006,23 +945,21 @@ void Worker::processClientInput(const PeerData &pd)
 
         if (m_is_walkie_talkie)
         {
-            m_level_meter_input = new LevelMeter(this);
+            m_level_meter_input = new LevelMeter();
+            connect(this, &Worker::destroyed, m_level_meter_input, &LevelMeter::deleteLater);
             connect(m_level_meter_input, &LevelMeter::currentlevel, this, &Worker::inputLevel);
             m_level_meter_input->start(m_streaming_info.inputAudioFormat());
 
             if (m_flow_control)
                 m_flow_control->start(inputFormat.sampleRate(), inputFormat.channelCount(), inputFormat.sampleSize());
             else
-                QMetaObject::invokeMethod(m_audio_input, "start", Qt::QueuedConnection,
-                                          Q_ARG(QAudioDeviceInfo, m_streaming_info.inputDeviceInfo()),
-                                          Q_ARG(QAudioFormat, m_streaming_info.inputAudioFormat()));
+                m_audio_input->start(m_streaming_info.inputDeviceInfo(), m_streaming_info.inputAudioFormat());
         }
 
-        QMetaObject::invokeMethod(m_audio_output, "start", Qt::QueuedConnection,
-                                  Q_ARG(QAudioDeviceInfo, m_streaming_info.outputDeviceInfo()),
-                                  Q_ARG(QAudioFormat, m_streaming_info.audioFormat()),
-                                  Q_ARG(int, m_streaming_info.timeToBuffer()),
-                                  Q_ARG(bool, m_streaming_info.isGetAudioEnabled()));
+        m_audio_output->start(m_streaming_info.outputDeviceInfo(),
+                              m_streaming_info.audioFormat(),
+                              m_streaming_info.timeToBuffer(),
+                              m_streaming_info.isGetAudioEnabled());
 
         if (m_level_meter_output)
             m_level_meter_output->start(m_streaming_info.audioFormat());

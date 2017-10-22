@@ -1,4 +1,4 @@
-CONFIG +=   AUDIOSTREAMINGLIB
+CONFIG += AUDIOSTREAMINGLIB
 
 include(../../AudioStreamingLib.pri)
 
@@ -24,8 +24,7 @@ SOURCES +=  $$PWD/securebytearray.cpp \
             $$PWD/audioinput.cpp \
             $$PWD/audiooutput.cpp \
             $$PWD/flowcontrol.cpp \
-            $$PWD/levelmeter.cpp \
-            $$PWD/levelmeterthread.cpp
+            $$PWD/levelmeter.cpp
 
 HEADERS +=  $$PWD/securebytearray.h \
             $$PWD/audiostreaminglibcore.h \
@@ -44,8 +43,7 @@ HEADERS +=  $$PWD/securebytearray.h \
             $$PWD/audiooutput.h \
             $$PWD/flowcontrol.h \
             $$PWD/common.h \
-            $$PWD/levelmeter.h \
-            $$PWD/levelmeterthread.h
+            $$PWD/levelmeter.h
 
 WITH_OPUS {
 DEFINES +=  NOMINMAX
@@ -72,6 +70,10 @@ unix:!macx:!android{
 INCLUDEPATH += $$LINUX_R8BRAIN_RESAMPLER_INCLUDE
 SOURCES += $$LINUX_R8BRAIN_RESAMPLER_INCLUDE/r8bbase.cpp
 }
+macx{
+INCLUDEPATH += $$MACOS_R8BRAIN_RESAMPLER_INCLUDE
+SOURCES += $$MACOS_R8BRAIN_RESAMPLER_INCLUDE/r8bbase.cpp
+}
 }
 
 #Copy header files
@@ -85,7 +87,7 @@ QMAKE_EXTRA_TARGETS += first copydata1 copydata2 copydata3
 
 #Set output directory
 
-win32 { #Windows
+KNOWNDEVICE:win32 { #Windows
 contains(QT_ARCH, i386) {
 CONFIG(debug, debug|release): DESTDIR = ../lib/x86/Debug
 CONFIG(release, debug|release): DESTDIR = ../lib/x86/Release
@@ -96,7 +98,7 @@ CONFIG(release, debug|release): DESTDIR = ../lib/x64/Release
 }
 }
 
-unix:!macx:!android { #Linux
+KNOWNDEVICE:unix:!macx:!android { #Linux
 contains(QT_ARCH, i386) {
 CONFIG(debug, debug|release): DESTDIR = ../lib/x86/Debug
 CONFIG(release, debug|release): DESTDIR = ../lib/x86/Release
@@ -107,19 +109,29 @@ CONFIG(release, debug|release): DESTDIR = ../lib/x64/Release
 }
 }
 
-contains(ANDROID_TARGET_ARCH, armeabi):android { #ANDROID ARM
+KNOWNDEVICE:contains(QT_ARCH, x86_64):macx { #MACOS
+CONFIG(debug, debug|release): DESTDIR = ../lib/x64/Debug
+CONFIG(release, debug|release): DESTDIR = ../lib/x64/Release
+}
+
+KNOWNDEVICE:contains(ANDROID_TARGET_ARCH, armeabi):android { #ANDROID ARM
 CONFIG(debug, debug|release): DESTDIR = ../android-lib/armeabi/Debug
 CONFIG(release, debug|release): DESTDIR = ../android-lib/armeabi/Release
 }
 
-contains(ANDROID_TARGET_ARCH, armeabi-v7a):android { #ANDROID ARMV7A
+KNOWNDEVICE:contains(ANDROID_TARGET_ARCH, armeabi-v7a):android { #ANDROID ARMV7A
 CONFIG(debug, debug|release): DESTDIR = ../android-lib/armeabi-v7a/Debug
 CONFIG(release, debug|release): DESTDIR = ../android-lib/armeabi-v7a/Release
 }
 
-contains(ANDROID_TARGET_ARCH, x86):android { #ANDROID x86
+KNOWNDEVICE:contains(ANDROID_TARGET_ARCH, x86):android { #ANDROID x86
 CONFIG(debug, debug|release): DESTDIR = ../android-lib/x86/Debug
 CONFIG(release, debug|release): DESTDIR = ../android-lib/x86/Release
+}
+
+!KNOWNDEVICE { #UNKNOWN DEVICE
+CONFIG(debug, debug|release): DESTDIR = ../unknown_device/Debug
+CONFIG(release, debug|release): DESTDIR = ../unknown_device/Release
 }
 
 OBJECTS_DIR = $$DESTDIR/.obj

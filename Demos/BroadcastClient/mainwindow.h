@@ -6,14 +6,16 @@
 #include <QtWidgets>
 #include <AudioStreamingLibCore>
 #include "spectrumanalyzer.h"
-#include "bars.h"
+#include "barswidget.h"
+#include "waveformwidget.h"
 #include "levelwidget.h"
+#include "audiorecorder.h"
 
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
 public:
-    MainWindow(QWidget *parent = 0);
+    MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
 signals:
@@ -27,6 +29,11 @@ private slots:
     void selectPeer(QListWidgetItem *item);
     void start();
     void adjustSettings();
+    void setRecordPath();
+    void startPauseRecord();
+    void stopRecord();
+    void resetRecordPage();
+    void writeToFile(const QByteArray &data);
     void volumeChanged(int volume);
     void error(const QString &error);
     void connected(const QHostAddress &address, const QString &id);
@@ -49,8 +56,19 @@ private:
     QListWidget *listwidgetpeers;
     QLabel *labelvolume;
     QSlider *slidervolume;
-    Bars *bars;
+    BarsWidget *bars;
+    WaveFormWidget *waveform;
     LevelWidget *level;
+
+    QLineEdit *linerecordpath;
+    QPushButton *buttonsearch;
+    QPushButton *buttonrecord;
+    QPushButton *buttonrecordstop;
+    QLCDNumber *lcdtime;
+
+    AudioRecorder *m_audio_recorder;
+    QAudioFormat m_format;
+    bool m_paused;
 };
 
 #endif // MAINWINDOW_H

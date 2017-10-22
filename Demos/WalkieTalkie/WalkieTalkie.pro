@@ -8,10 +8,12 @@ TEMPLATE =  app
 
 SOURCES +=  main.cpp \
             mainwindow.cpp \
-            levelwidget.cpp
+            levelwidget.cpp \
+            audiorecorder.cpp
 
 HEADERS +=  mainwindow.h \
-            levelwidget.h
+            levelwidget.h \
+            audiorecorder.h
 
 android {
 SOURCES += \

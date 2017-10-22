@@ -9,7 +9,7 @@
 class Worker;
 
 #define MIN_BUFFERED_TIME 10
-#define MAX_BUFFERED_TIME 100 //Time to buffer plus this value
+#define MAX_BUFFERED_TIME 300 //Time to buffer plus this value
 
 #define MAX_ID_LENGTH 20
 
@@ -47,59 +47,59 @@ public:
         CustomAudioDevice
     }AudioDeviceType;
 
-    QByteArray negotiationString() const
+    QByteArray negotiationString()
     {
         return m_negotiation_string;
     }
-    QString ID() const
+    QString ID()
     {
         return m_id;
     }
-    StreamingWorkMode workMode() const
+    StreamingWorkMode workMode()
     {
         return m_work_mode;
     }
-    qint32 timeToBuffer() const
+    qint32 timeToBuffer()
     {
         return m_time_to_buffer;
     }
-    AudioDeviceType inputDeviceType() const
+    AudioDeviceType inputDeviceType()
     {
         return m_input_dev_type;
     }
-    AudioDeviceType outputDeviceType() const
+    AudioDeviceType outputDeviceType()
     {
         return m_output_dev_type;
     }
-    QAudioFormat inputAudioFormat() const
+    QAudioFormat inputAudioFormat()
     {
         return m_input_format;
     }
-    QAudioFormat audioFormat() const
+    QAudioFormat audioFormat()
     {
         return m_format;
     }
-    QAudioDeviceInfo inputDeviceInfo() const
+    QAudioDeviceInfo inputDeviceInfo()
     {
         return m_input;
     }
-    QAudioDeviceInfo outputDeviceInfo() const
+    QAudioDeviceInfo outputDeviceInfo()
     {
         return m_output;
     }
-    int OpusBitrate() const
+    int OpusBitrate()
     {
         return m_opus_bitrate;
     }
-    bool isCallBackEnabled() const
+    bool isCallBackEnabled()
     {
         return m_callback_enabled;
     }
-    bool isGetAudioEnabled() const
+    bool isGetAudioEnabled()
     {
         return m_is_get_audio_enabled;
     }
-    bool isSslEnabled() const
+    bool isSslEnabled()
     {
         return m_ssl_enabled;
     }
@@ -182,17 +182,29 @@ private:
     bool m_ssl_enabled;
 };
 
-QDataStream &operator<<(QDataStream &stream, const StreamingInfo &info);
+QDataStream &operator<<(QDataStream &stream, StreamingInfo &info);
 QDataStream &operator>>(QDataStream &stream, StreamingInfo &info);
+
+QDebug operator<<(QDebug debug, StreamingInfo info);
 
 class AudioStreamingLibCore : public QObject
 {
     Q_OBJECT
 public:
-    explicit AudioStreamingLibCore(QObject *parent = 0);
+    explicit AudioStreamingLibCore(QObject *parent = nullptr);
     ~AudioStreamingLibCore();
 
     static bool generateAsymmetricKeys(QByteArray *private_key, QByteArray *public_key);
+
+    static qint64 timeToSize(qint64 ms_time, int channel_count, int sample_size, int sample_rate);
+    static qint64 timeToSize(qint64 ms_time, const QAudioFormat &format);
+    static qint64 sizeToTime(qint64 bytes, int channel_count, int sample_size, int sample_rate);
+    static qint64 sizeToTime(qint64 bytes, const QAudioFormat &format);
+
+    static QByteArray convertFloatToInt16(const QByteArray &data);
+    static QByteArray convertInt16ToFloat(const QByteArray &data);
+
+    static QByteArray mixFloatAudio(const QByteArray &data1, const QByteArray &data2);
 
 signals:
     void connected(QHostAddress,QString);
@@ -203,8 +215,8 @@ signals:
     void outputData(QByteArray);
     void veryOutputData(QByteArray);
     void extraData(QByteArray);
-    void inputLevel(qreal);
-    void outputLevel(qreal);
+    void inputLevel(float);
+    void outputLevel(float);
     void adjustSettings();
     void extraDataWritten();
     void finished();
@@ -213,7 +225,7 @@ signals:
 public slots:
     bool start(const StreamingInfo &streaming_info);
     void stop();
-    bool isRunning() const;
+    bool isRunning();
     DiscoverClient *discoverInstance();
     void setKeys(const QByteArray &private_key, const QByteArray &public_key);
     void listen(quint16 port, bool auto_accept = true, const QByteArray &password = QByteArray(), int max_connections = 30);
@@ -224,15 +236,15 @@ public slots:
     void writeExtraDataResult();
     void inputDataBack(const QByteArray &data);
     void outputDataBack(const QByteArray &data);
-    bool isInputMuted() const;
+    bool isInputMuted();
     void setInputMuted(bool mute);
-    int volume() const;
+    int volume();
     void setVolume(int volume);
-    StreamingInfo streamingInfo() const;
-    QList<QHostAddress> connectionsList() const;
-    bool isReadyToWriteExtraData() const;
-    QAudioFormat audioFormat() const;
-    QAudioFormat inputAudioFormat() const;
+    StreamingInfo streamingInfo();
+    QList<QHostAddress> connectionsList();
+    bool isReadyToWriteExtraData();
+    QAudioFormat audioFormat();
+    QAudioFormat inputAudioFormat();
 
 private slots:
     void finishedPrivate();
@@ -244,6 +256,8 @@ private:
     DiscoverClient *m_client_discover;
     bool m_running;
     bool m_delete_pending;
+    QAudioFormat m_audio_format;
+    QAudioFormat m_input_format;
 };
 
 #endif // AUDIOSTREAMINGLIBCORE_H

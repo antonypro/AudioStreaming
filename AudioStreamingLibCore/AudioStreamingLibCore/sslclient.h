@@ -8,7 +8,7 @@ class SslClient : public AbstractClient
 {
     Q_OBJECT
 public:
-    explicit SslClient(QObject *parent = 0);
+    explicit SslClient(QObject *parent = nullptr);
     ~SslClient();
 
 public slots:

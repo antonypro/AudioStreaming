@@ -10,7 +10,7 @@ class AbstractClient : public QObject
 {
     Q_OBJECT
 public:
-    explicit AbstractClient(QObject *parent = 0);
+    explicit AbstractClient(QObject *parent = nullptr);
 
 signals:
     void connected(PeerData,QString);

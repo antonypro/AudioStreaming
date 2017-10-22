@@ -9,13 +9,17 @@ TEMPLATE =  app
 SOURCES +=  main.cpp \
             mainwindow.cpp \
             levelwidget.cpp \
-            bars.cpp \
-            spectrumanalyzer.cpp
+            barswidget.cpp \
+            spectrumanalyzer.cpp \
+            waveformwidget.cpp \
+            audiorecorder.cpp
 
 HEADERS +=  mainwindow.h \
             levelwidget.h \
-            bars.h \
-            spectrumanalyzer.h
+            barswidget.h \
+            spectrumanalyzer.h \
+            waveformwidget.h \
+            audiorecorder.h
 
 win32 {
 SOURCES += qwinloopback.cpp

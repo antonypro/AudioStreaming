@@ -8,7 +8,7 @@ class DiscoverServer : public QObject
 {
     Q_OBJECT
 public:
-    explicit DiscoverServer(QObject *parent = 0);
+    explicit DiscoverServer(QObject *parent = nullptr);
     ~DiscoverServer();
 
 signals:

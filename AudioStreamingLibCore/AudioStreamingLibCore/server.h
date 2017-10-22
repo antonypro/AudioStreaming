@@ -7,7 +7,7 @@ class Server : public AbstractServer
 {
     Q_OBJECT
 public:
-    explicit Server(QObject *parent = 0);
+    explicit Server(QObject *parent = nullptr);
     ~Server();
 
 public slots:

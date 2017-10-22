@@ -23,7 +23,7 @@ class Worker : public QObject
 {
     Q_OBJECT
 public:
-    explicit Worker(QObject *parent = 0);
+    explicit Worker(QObject *parent = nullptr);
     ~Worker();
 
 signals:
@@ -35,8 +35,8 @@ signals:
     void outputData(QByteArray);
     void veryOutputData(QByteArray);
     void extraData(QByteArray);
-    void inputLevel(qreal);
-    void outputLevel(qreal);
+    void inputLevel(float);
+    void outputLevel(float);
     void adjustSettings();
     void extraDataWritten();
     void error(QString);

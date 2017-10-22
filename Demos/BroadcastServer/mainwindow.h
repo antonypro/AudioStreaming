@@ -6,8 +6,10 @@
 #include <QtWidgets>
 #include <AudioStreamingLibCore>
 #include "spectrumanalyzer.h"
-#include "bars.h"
+#include "barswidget.h"
+#include "waveformwidget.h"
 #include "levelwidget.h"
+#include "audiorecorder.h"
 #ifdef Q_OS_WIN
 #include "qwinloopback.h"
 #endif
@@ -16,7 +18,7 @@ class MainWindow : public QMainWindow
 {
     Q_OBJECT
 public:
-    MainWindow(QWidget *parent = 0);
+    MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
 private slots:
@@ -24,6 +26,11 @@ private slots:
     void loopbackdata(const QByteArray &data);
     void process(const QByteArray &data);
     void adjustSettings();
+    void setRecordPath();
+    void startPauseRecord();
+    void stopRecord();
+    void resetRecordPage();
+    void writeToFile(const QByteArray &data);
     void updateConnections();
     void error(const QString &error);
     void finished();
@@ -50,8 +57,19 @@ private:
     QLineEdit *lineid;
     QLineEdit *linepassword;
     QPlainTextEdit *texteditsettings;
-    Bars *bars;
+    BarsWidget *bars;
+    WaveFormWidget *waveform;
     LevelWidget *level;
+
+    QLineEdit *linerecordpath;
+    QPushButton *buttonsearch;
+    QPushButton *buttonrecord;
+    QPushButton *buttonrecordstop;
+    QLCDNumber *lcdtime;
+
+    AudioRecorder *m_audio_recorder;
+    QAudioFormat m_format;
+    bool m_paused;
 };
 
 #endif // MAINWINDOW_H

@@ -5,6 +5,8 @@
 OpusEncoderClass::OpusEncoderClass(QObject *parent) : QObject(parent)
 {
     m_initialized = false;
+
+    START_THREAD
 }
 
 OpusEncoderClass::~OpusEncoderClass()
@@ -16,7 +18,7 @@ OpusEncoderClass::~OpusEncoderClass()
     opus_encoder_destroy(m_encoder);
 }
 
-void OpusEncoderClass::start(int sample_rate, int channels, int bitrate, int frame_size, int application)
+void OpusEncoderClass::startPrivate(int sample_rate, int channels, int bitrate, int frame_size, int application)
 {
     if (m_initialized)
         return;
@@ -48,7 +50,17 @@ void OpusEncoderClass::start(int sample_rate, int channels, int bitrate, int fra
     m_frame_size = frame_size;
 }
 
-void OpusEncoderClass::write(const QByteArray &data)
+void OpusEncoderClass::start(int sample_rate, int channels, int bitrate, int frame_size, int application)
+{
+    QMetaObject::invokeMethod(this, "startPrivate", Qt::QueuedConnection,
+                              Q_ARG(int, sample_rate),
+                              Q_ARG(int, channels),
+                              Q_ARG(int, bitrate),
+                              Q_ARG(int, frame_size),
+                              Q_ARG(int, application));
+}
+
+void OpusEncoderClass::writePrivate(const QByteArray &data)
 {
     m_buffer.append(data);
 
@@ -58,53 +70,40 @@ void OpusEncoderClass::write(const QByteArray &data)
         emit encoded(result);
 }
 
+void OpusEncoderClass::write(const QByteArray &data)
+{
+    QMetaObject::invokeMethod(this, "writePrivate", Qt::QueuedConnection,
+                              Q_ARG(QByteArray, data));
+}
+
 QByteArray OpusEncoderClass::encode()
 {
     if (!m_initialized)
         return QByteArray();
 
-    int size = sizeof(opus_int16) * m_channels * m_frame_size;
+    int size = sizeof(float) * m_channels * m_frame_size;
 
     if (m_buffer.size() < size)
         return QByteArray();
 
-    opus_int16 *in = new opus_int16[m_frame_size * m_channels];
-    unsigned char *cbits = new unsigned char[MAX_PACKET_SIZE];
     int nbBytes;
 
-    int i;
-    unsigned char *pcm_bytes = new unsigned char[size];
-
-    /* Read a 16 bits/sample audio frame. */
-    memcpy(pcm_bytes, m_buffer.data(), size);
-
+    QByteArray input = m_buffer.mid(0, size);
     m_buffer.remove(0, size);
 
-    /* Convert from little-endian ordering. */
-    for (i=0;i<m_channels*m_frame_size;i++)
-        in[i]=pcm_bytes[2*i+1]<<8|pcm_bytes[2*i];
+    QByteArray output = QByteArray(MAX_PACKET_SIZE, (char)0);
 
     /* Encode the frame. */
-    nbBytes = opus_encode(m_encoder, in, m_frame_size, cbits, MAX_PACKET_SIZE);
-    if (nbBytes<0)
+    nbBytes = opus_encode_float(m_encoder, (const float*)input.constData(), m_frame_size, (uchar*)output.data(), MAX_PACKET_SIZE);
+
+    if (nbBytes < 0)
     {
         emit error(QString("Opus encode failed: %0").arg(opus_strerror(nbBytes)));
-
-        delete[] pcm_bytes;
-
-        delete[] in;
-        delete[] cbits;
 
         return QByteArray();
     }
 
-    /* Write the encoded audio to output. */
-    QByteArray output = QByteArray((char*)cbits, nbBytes);
-
-    delete[] pcm_bytes;
-
-    delete[] in;
-    delete[] cbits;
+    output.resize(nbBytes);
 
     return output;
 }

@@ -18,7 +18,7 @@ class QWinLoopback : public QObject
 {
     Q_OBJECT
 public:
-    explicit QWinLoopback(QObject *parent = 0);
+    explicit QWinLoopback(QObject *parent = nullptr);
     ~QWinLoopback();
 
 signals:

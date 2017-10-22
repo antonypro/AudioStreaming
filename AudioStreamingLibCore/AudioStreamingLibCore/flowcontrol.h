@@ -8,7 +8,7 @@ class FlowControl : public QObject
 {
     Q_OBJECT
 public:
-    explicit FlowControl(QObject *parent = 0);
+    explicit FlowControl(QObject *parent = nullptr);
 
 signals:
     void error(QString);

@@ -19,7 +19,7 @@ class OpenSslLib : public QObject
 {
     Q_OBJECT
 public:
-    explicit OpenSslLib(QObject *parent = 0);
+    explicit OpenSslLib(QObject *parent = nullptr);
     ~OpenSslLib();
 
     //Functions
