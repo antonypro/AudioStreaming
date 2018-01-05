@@ -82,7 +82,11 @@ void WaveFormWidget::calculateWaveFormThread(const QByteArray &data, int window_
         if (density < 1)
             density = 1;
 
-        for (int i = 0; i < numSamples; i += density)
+        int iter = numSamples - density;
+
+        int i;
+
+        for (i = 0; i < iter; i += density)
         {
             float level = wave_form_vector[i];
 
@@ -97,7 +101,27 @@ void WaveFormWidget::calculateWaveFormThread(const QByteArray &data, int window_
             QPoint point = QPoint(qRound(i * ((float)(window_width - 1) / numSamples)),
                                   window_height - level * qRound(window_height * 0.75));
 
-            if (point_list.isEmpty() || point.y() == window_height / 2 || point.x() > point_list.last().x() + 2)
+            if (point_list.isEmpty() || point.x() > point_list.last().x() + 2)
+                point_list.append(point);
+        }
+
+        iter = numSamples - i;
+        //Process remaining data
+        {
+            float level = wave_form_vector[i];
+
+            for (int j = 1; j < iter; j++)
+            {
+                float sample = wave_form_vector[i + j];
+
+                if (qAbs(sample) > qAbs(level))
+                    level = sample;
+            }
+
+            QPoint point = QPoint(qRound(i * ((float)(window_width - 1) / numSamples)),
+                                  window_height - level * qRound(window_height * 0.75));
+
+            if (point_list.isEmpty() || point.x() > point_list.last().x() + 2)
                 point_list.append(point);
         }
 
@@ -114,13 +138,16 @@ void WaveFormWidget::calculateWaveFormThread(const QByteArray &data, int window_
 
 void WaveFormWidget::prepaint(const QVector<QPoint> &point_list)
 {
+    if (!m_initialized)
+        return;
+
     m_point_list = point_list;
     repaint();
 }
 
 void WaveFormWidget::paintEvent(QPaintEvent *event)
 {
-    Q_UNUSED(event);
+    Q_UNUSED(event)
 
     QPainter painter(this);
     painter.fillRect(rect(), Qt::black);

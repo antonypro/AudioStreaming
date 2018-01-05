@@ -7,7 +7,7 @@ include $(CLEAR_VARS)
 
 LOCAL_MODULE        := codec
 LOCAL_CFLAGS        := -DNULL=0
-LOCAL_LDLIBS        := -lm -llog
+#LOCAL_LDLIBS        := -lm -llog
 LOCAL_C_INCLUDES    := $(LOCAL_PATH)/$(OPUS_DIR)/include
 LOCAL_SHARED_LIBRARIES := opus
-include $(BUILD_SHARED_LIBRARY)
+include $(BUILD_STATIC_LIBRARY)
