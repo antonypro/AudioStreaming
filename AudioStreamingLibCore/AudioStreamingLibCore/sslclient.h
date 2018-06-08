@@ -1,45 +1,44 @@
 #ifndef SSLCLIENT_H
 #define SSLCLIENT_H
 
-#include "abstractclient.h"
-#include "openssllib.h"
+#include <QtCore>
+#include <QtNetwork>
+#include "common.h"
 
-class SslClient : public AbstractClient
+class SslClient : public QObject
 {
     Q_OBJECT
 public:
     explicit SslClient(QObject *parent = nullptr);
     ~SslClient();
 
+signals:
+    void connectedToServer(QByteArray);
+    void pending(quint32, QByteArray);
+    void disconnected();
+    void connectionInfo(quint32, QByteArray, QByteArray);
+    void remotePort(quint16);
+    void error(QString);
+
 public slots:
-    void abort();
-    void connectToHost(const QString &host, quint16 port,
-                       const QByteArray &negotiation_string,
-                       const QString &id,
-                       const QByteArray &password);
+    void connectToHost(const QString &host, quint16 port);
     void stop();
     int write(const QByteArray &data);
 
 private slots:
-    bool testSsl();
+    void sslErrors(QList<QSslError> errors);
     void timeout();
-    void readyBeginEncryption();
-    void connectedPrivate();
+    void encrypted();
     void disconnectedPrivate();
     void errorPrivate(QAbstractSocket::SocketError e);
     void readyReadPrivate();
+    void processInput(const QByteArray &peer_data);
 
 private:
-    QTcpSocket *m_socket;
-    OpenSslLib *m_global_ssl;
+    QSslSocket *m_socket;
     QByteArray m_buffer;
     qint32 m_size;
-    OpenSslLib *ssl;
     QTimer *m_timer;
-    QByteArray m_negotiation_string;
-    QString m_id;
-    QString m_remote_id;
-    QByteArray m_rnd;
 };
 
 #endif // SSLCLIENT_H

@@ -40,9 +40,10 @@ bool AudioStreamingLibCore::start(const StreamingInfo &streaming_info)
     connect(m_worker, &Worker::destroyed, m_thread, &QThread::quit);
     connect(m_thread, &QThread::finished, m_thread, &QThread::deleteLater);
 
-    setTonullptr(m_worker);
+    SETTONULLPTR(m_worker);
 
     connect(m_worker, &Worker::connected, this, &AudioStreamingLibCore::connected);
+    connect(m_worker, &Worker::connectedToServer, this, &AudioStreamingLibCore::connectedToServer);
     connect(m_worker, &Worker::disconnected, this, &AudioStreamingLibCore::disconnected);
     connect(m_worker, &Worker::pending, this, &AudioStreamingLibCore::pending);
     connect(m_worker, &Worker::inputData, this, &AudioStreamingLibCore::inputData);
@@ -97,11 +98,6 @@ void AudioStreamingLibCore::finishedPrivate()
     m_delete_pending = false;
 
     emit finished();
-}
-
-bool AudioStreamingLibCore::generateAsymmetricKeys(QByteArray *private_key, QByteArray *public_key)
-{
-    return OpenSslLib::generateKeys((SecureByteArray*)private_key, (SecureByteArray*)public_key);
 }
 
 qint64 AudioStreamingLibCore::timeToSize(qint64 ms_time, int channel_count, int sample_size, int sample_rate)
@@ -169,19 +165,10 @@ DiscoverClient *AudioStreamingLibCore::discoverInstance()
         m_client_discover->deleteLater();
 
     m_client_discover = new DiscoverClient(this);
-    setTonullptr(m_client_discover);
+    SETTONULLPTR(m_client_discover);
     QTimer::singleShot(1000, m_client_discover, &DiscoverClient::deleteLater);
 
     return m_client_discover;
-}
-
-void AudioStreamingLibCore::setKeys(const QByteArray &private_key, const QByteArray &public_key)
-{
-    if (!RUNNING)
-        return;
-
-    QMetaObject::invokeMethod(m_worker, "setKeys", Qt::QueuedConnection,
-                              Q_ARG(QByteArray, private_key), Q_ARG(QByteArray, public_key));
 }
 
 void AudioStreamingLibCore::listen(quint16 port, bool auto_accept, const QByteArray &password, int max_connections)
@@ -200,6 +187,22 @@ void AudioStreamingLibCore::connectToHost(const QString &host, quint16 port, con
 
     QMetaObject::invokeMethod(m_worker, "connectToHost", Qt::QueuedConnection,
                               Q_ARG(QString, host), Q_ARG(quint16, port), Q_ARG(QByteArray, password));
+}
+
+void AudioStreamingLibCore::connectToPeer(const QString &ID)
+{
+    if (!RUNNING)
+        return;
+
+    QMetaObject::invokeMethod(m_worker, "connectToPeer", Qt::QueuedConnection, Q_ARG(QString, ID));
+}
+
+void AudioStreamingLibCore::acceptSslCertificate()
+{
+    if (!RUNNING)
+        return;
+
+    QMetaObject::invokeMethod(m_worker, "acceptSslCertificate", Qt::QueuedConnection);
 }
 
 void AudioStreamingLibCore::acceptConnection()
@@ -360,7 +363,7 @@ QDataStream &operator<<(QDataStream &stream, StreamingInfo &info)
     stream << (qint32)info.inputDeviceType();
     stream << (qint32)info.outputDeviceType();
     stream << info.isCallBackEnabled();
-    stream << info.isSslEnabled();
+    stream << info.isEncryptionEnabled();
 
     //Serialize audio format
     stream << (qint32)info.audioFormat().sampleSize();
@@ -406,8 +409,8 @@ QDataStream &operator>>(QDataStream &stream, StreamingInfo &info)
     bool isCallBackEnabled;
     stream >> isCallBackEnabled;
 
-    bool isSslEnabled;
-    stream >> isSslEnabled;
+    bool isEncryptionEnabled;
+    stream >> isEncryptionEnabled;
 
     //Serialize audio format
     qint32 sampleSize;
@@ -487,7 +490,7 @@ QDataStream &operator>>(QDataStream &stream, StreamingInfo &info)
     info.setInputDeviceInfo(inputinfo);
     info.setOutputDeviceInfo(outputinfo);
     info.setCallBackEnabled(isCallBackEnabled);
-    info.setSslEnabled(isSslEnabled);
+    info.setEncryptionEnabled(isEncryptionEnabled);
 
     return stream;
 }
@@ -569,7 +572,7 @@ QDebug operator<<(QDebug debug, StreamingInfo info)
 
     debug << "Get audio enabled:" << info.isGetAudioEnabled() << endl;
 
-    debug << "Ssl enabled:" << info.isSslEnabled() << endl;
+    debug << "Encryption enabled:" << info.isEncryptionEnabled() << endl;
 
     return debug;
 }

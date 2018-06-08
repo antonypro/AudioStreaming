@@ -95,6 +95,8 @@ protected:
   template<typename Expression>
   EIGEN_DEVICE_FUNC void construct(Expression& expr)
   {
+    EIGEN_STATIC_ASSERT_SAME_MATRIX_SIZE(PlainObjectType,Expression);
+
     if(PlainObjectType::RowsAtCompileTime==1)
     {
       eigen_assert(expr.rows()==1 || expr.cols()==1);
@@ -184,6 +186,8 @@ protected:
   * void foo(const Ref<MatrixXf,0,Stride<> >& A) { foo_impl(A); }
   * \endcode
   *
+  * See also the following stackoverflow questions for further references:
+  *  - <a href="http://stackoverflow.com/questions/21132538/correct-usage-of-the-eigenref-class">Correct usage of the Eigen::Ref<> class</a>
   *
   * \sa PlainObjectBase::Map(), \ref TopicStorageOrders
   */

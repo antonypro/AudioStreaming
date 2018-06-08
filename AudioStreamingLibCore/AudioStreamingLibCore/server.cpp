@@ -19,12 +19,6 @@ void Server::abort(qintptr descriptor)
     socket->abort();
 }
 
-void Server::setKeys(const QByteArray &private_key, const QByteArray &public_key)
-{
-    Q_UNUSED(private_key)
-    Q_UNUSED(public_key)
-}
-
 void Server::listen(quint16 port, bool auto_accept, int max_connections,
                     const QByteArray &negotiation_string,
                     const QString &id,
@@ -43,7 +37,7 @@ void Server::listen(quint16 port, bool auto_accept, int max_connections,
 
     m_server = new TcpServer(this);
 
-    setTonullptr(m_server);
+    SETTONULLPTR(m_server);
 
     m_max_connections = max_connections;
 

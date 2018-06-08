@@ -183,12 +183,22 @@ template<> EIGEN_STRONG_INLINE Packet4d pmadd(const Packet4d& a, const Packet4d&
 }
 #endif
 
-template<> EIGEN_STRONG_INLINE Packet8f pmin<Packet8f>(const Packet8f& a, const Packet8f& b) { return _mm256_min_ps(a,b); }
-template<> EIGEN_STRONG_INLINE Packet4d pmin<Packet4d>(const Packet4d& a, const Packet4d& b) { return _mm256_min_pd(a,b); }
-
-template<> EIGEN_STRONG_INLINE Packet8f pmax<Packet8f>(const Packet8f& a, const Packet8f& b) { return _mm256_max_ps(a,b); }
-template<> EIGEN_STRONG_INLINE Packet4d pmax<Packet4d>(const Packet4d& a, const Packet4d& b) { return _mm256_max_pd(a,b); }
-
+template<> EIGEN_STRONG_INLINE Packet8f pmin<Packet8f>(const Packet8f& a, const Packet8f& b) {
+  // Arguments are swapped to match NaN propagation behavior of std::min.
+  return _mm256_min_ps(b,a);
+}
+template<> EIGEN_STRONG_INLINE Packet4d pmin<Packet4d>(const Packet4d& a, const Packet4d& b) {
+  // Arguments are swapped to match NaN propagation behavior of std::min.
+  return _mm256_min_pd(b,a);
+}
+template<> EIGEN_STRONG_INLINE Packet8f pmax<Packet8f>(const Packet8f& a, const Packet8f& b) {
+  // Arguments are swapped to match NaN propagation behavior of std::max.
+  return _mm256_max_ps(b,a);
+}
+template<> EIGEN_STRONG_INLINE Packet4d pmax<Packet4d>(const Packet4d& a, const Packet4d& b) {
+  // Arguments are swapped to match NaN propagation behavior of std::max.
+  return _mm256_max_pd(b,a);
+}
 template<> EIGEN_STRONG_INLINE Packet8f pround<Packet8f>(const Packet8f& a) { return _mm256_round_ps(a, _MM_FROUND_CUR_DIRECTION); }
 template<> EIGEN_STRONG_INLINE Packet4d pround<Packet4d>(const Packet4d& a) { return _mm256_round_pd(a, _MM_FROUND_CUR_DIRECTION); }
 
@@ -225,7 +235,7 @@ template<> EIGEN_STRONG_INLINE Packet8f ploaddup<Packet8f>(const float* from)
 //   Packet8f tmp  = _mm256_castps128_ps256(_mm_loadu_ps(from));
 //   tmp = _mm256_insertf128_ps(tmp, _mm_movehl_ps(_mm256_castps256_ps128(tmp),_mm256_castps256_ps128(tmp)), 1);
 //   return _mm256_unpacklo_ps(tmp,tmp);
-  
+
   // _mm256_insertf128_ps is very slow on Haswell, thus:
   Packet8f tmp = _mm256_broadcast_ps((const __m128*)(const void*)from);
   // mimic an "inplace" permutation of the lower 128bits using a blend
@@ -333,9 +343,12 @@ template<> EIGEN_STRONG_INLINE Packet4d preverse(const Packet4d& a)
 {
    __m256d tmp = _mm256_shuffle_pd(a,a,5);
   return _mm256_permute2f128_pd(tmp, tmp, 1);
-
+  #if 0
+  // This version is unlikely to be faster as _mm256_shuffle_ps and _mm256_permute_pd
+  // exhibit the same latency/throughput, but it is here for future reference/benchmarking...
   __m256d swap_halves = _mm256_permute2f128_pd(a,a,1);
     return _mm256_permute_pd(swap_halves,5);
+  #endif
 }
 
 // pabs should be ok
@@ -402,7 +415,7 @@ template<> EIGEN_STRONG_INLINE double predux<Packet4d>(const Packet4d& a)
   return predux(Packet2d(_mm_add_pd(_mm256_castpd256_pd128(a),_mm256_extractf128_pd(a,1))));
 }
 
-template<> EIGEN_STRONG_INLINE Packet4f predux_downto4<Packet8f>(const Packet8f& a)
+template<> EIGEN_STRONG_INLINE Packet4f predux_half_dowto4<Packet8f>(const Packet8f& a)
 {
   return _mm_add_ps(_mm256_castps256_ps128(a),_mm256_extractf128_ps(a,1));
 }

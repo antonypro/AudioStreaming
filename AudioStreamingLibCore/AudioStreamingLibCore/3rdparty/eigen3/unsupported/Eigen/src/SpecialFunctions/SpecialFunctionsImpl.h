@@ -121,9 +121,9 @@ template <>
 struct lgamma_impl<float> {
   EIGEN_DEVICE_FUNC
   static EIGEN_STRONG_INLINE float run(float x) {
-#if !defined(__CUDA_ARCH__) && (defined(_BSD_SOURCE) || defined(_SVID_SOURCE)) && !defined(__APPLE__)
-    int signgam;
-    return ::lgammaf_r(x, &signgam);
+#if !defined(EIGEN_CUDA_ARCH) && (defined(_BSD_SOURCE) || defined(_SVID_SOURCE)) && !defined(__APPLE__)
+    int dummy;
+    return ::lgammaf_r(x, &dummy);
 #else
     return ::lgammaf(x);
 #endif
@@ -134,9 +134,9 @@ template <>
 struct lgamma_impl<double> {
   EIGEN_DEVICE_FUNC
   static EIGEN_STRONG_INLINE double run(double x) {
-#if !defined(__CUDA_ARCH__) && (defined(_BSD_SOURCE) || defined(_SVID_SOURCE)) && !defined(__APPLE__)
-    int signgam;
-    return ::lgamma_r(x, &signgam);
+#if !defined(EIGEN_CUDA_ARCH) && (defined(_BSD_SOURCE) || defined(_SVID_SOURCE)) && !defined(__APPLE__)
+    int dummy;
+    return ::lgamma_r(x, &dummy);
 #else
     return ::lgamma(x);
 #endif
@@ -535,6 +535,10 @@ struct igammac_impl {
       return nan;
     }
 
+    if ((numext::isnan)(a) || (numext::isnan)(x)) { // propagate nans
+      return nan;
+    }
+
     if ((x < one) || (x < a)) {
       /* The checks above ensure that we meet the preconditions for
        * igamma_impl::Impl(), so call it, rather than igamma_impl::Run().
@@ -592,7 +596,7 @@ struct igammac_impl {
     qkm1 = z * x;
     ans = pkm1 / qkm1;
 
-    while (true) {
+    for (int i = 0; i < 2000; i++) {
       c += one;
       y += one;
       z += two;
@@ -724,6 +728,10 @@ struct igamma_impl {
       return nan;
     }
 
+    if ((numext::isnan)(a) || (numext::isnan)(x)) { // propagate nans
+      return nan;
+    }
+
     if ((x > one) && (x > a)) {
       /* The checks above ensure that we meet the preconditions for
        * igammac_impl::Impl(), so call it, rather than igammac_impl::Run().
@@ -770,7 +778,7 @@ struct igamma_impl {
     c = one;
     ans = one;
 
-    while (true) {
+    for (int i = 0; i < 2000; i++) {
       r += one;
       c *= x/r;
       ans += c;

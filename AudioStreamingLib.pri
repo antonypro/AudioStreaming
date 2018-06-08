@@ -7,6 +7,9 @@ if (contains(OPUS_ENABLED, TRUE)) CONFIG += WITH_OPUS
 
 if (contains(OPENSSL_ENABLED, TRUE)) CONFIG += WITH_OPENSSL
 
+if (contains(DEBUG_LEVEL, 1)) DEFINES += IS_TO_DEBUG_VERBOSE_1
+if (contains(DEBUG_LEVEL, 2)) DEFINES += IS_TO_DEBUG_VERBOSE_2
+
 WITH_OPUS:DEFINES += OPUS
 WITH_OPENSSL:DEFINES += OPENSSL
 
@@ -20,7 +23,9 @@ macx:INCLUDEPATH += $$MACOS_OPUS_INCLUDE
 
 INCLUDEPATH += $$PWD/AudioStreamingLib
 
-win32-g++ { #MINGW
+
+
+contains(QT_ARCH, i386):win32-g++ { #MINGW 32 bits
 message("Using settings for Windows MinGW 32 bits")
 
 CONFIG += KNOWNDEVICE
@@ -30,14 +35,35 @@ CONFIG += KNOWNDEVICE
 CONFIG(debug, debug|release):!AUDIOSTREAMINGLIB:LIBS += -L"$$PWD/AudioStreamingLibCore/lib/x86/Debug/" -lAudioStreamingLibCore
 CONFIG(release, debug|release):!AUDIOSTREAMINGLIB:LIBS += -L"$$PWD/AudioStreamingLibCore/lib/x86/Release/" -lAudioStreamingLibCore
 
-WITH_OPUS:LIBS += $$MINGW_OPUS_LIB
+WITH_OPUS:LIBS += $$MINGW_32BITS_OPUS_LIB
 
 WITH_OPENSSL {
-LIBS += $$MINGW_OPENSSL_SSL_LIB
-LIBS += $$MINGW_OPENSSL_CRYPTO_LIB
+LIBS += $$MINGW_32BITS_OPENSSL_SSL_LIB
+LIBS += $$MINGW_32BITS_OPENSSL_CRYPTO_LIB
 LIBS += -lGdi32
 }
-} #MINGW
+} #MINGW 32 bits
+
+
+
+contains(QT_ARCH, x86_64):win32-g++ { #MINGW 64 bits
+message("Using settings for Windows MinGW 64 bits")
+
+CONFIG += KNOWNDEVICE
+
+!AUDIOSTREAMINGLIB:INCLUDEPATH += $$PWD/AudioStreamingLibCore/include
+
+CONFIG(debug, debug|release):!AUDIOSTREAMINGLIB:LIBS += -L"$$PWD/AudioStreamingLibCore/lib/x64/Debug/" -lAudioStreamingLibCore
+CONFIG(release, debug|release):!AUDIOSTREAMINGLIB:LIBS += -L"$$PWD/AudioStreamingLibCore/lib/x64/Release/" -lAudioStreamingLibCore
+
+WITH_OPUS:LIBS += $$MINGW_64BITS_OPUS_LIB
+
+WITH_OPENSSL {
+LIBS += $$MINGW_64BITS_OPENSSL_SSL_LIB
+LIBS += $$MINGW_64BITS_OPENSSL_CRYPTO_LIB
+LIBS += -lGdi32
+}
+} #MINGW 64 bits
 
 
 

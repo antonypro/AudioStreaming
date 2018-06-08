@@ -30,7 +30,7 @@ void WaveFormWidget::start(const QAudioFormat &format)
     m_initialized = true;
     m_format = format;
 
-    m_size = AudioStreamingLibCore::timeToSize(100, 1, sizeof(float) * 8, m_format.sampleRate());
+    m_size = AudioStreamingLibCore::timeToSize(50, m_format);
 }
 
 void WaveFormWidget::clear()

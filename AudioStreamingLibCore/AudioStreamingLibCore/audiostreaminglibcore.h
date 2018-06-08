@@ -9,7 +9,7 @@
 class Worker;
 
 #define MIN_BUFFERED_TIME 10
-#define MAX_BUFFERED_TIME 300 //Time to buffer plus this value
+#define MAX_BUFFERED_TIME 100 //Time to buffer plus this value
 
 #define MAX_ID_LENGTH 20
 
@@ -29,7 +29,7 @@ public:
         m_opus_bitrate = 128 * 1000;
         m_callback_enabled = false;
         m_is_get_audio_enabled = false;
-        m_ssl_enabled = false;
+        m_encryption_enabled = false;
     }
 
     typedef enum StreamingWorkMode
@@ -38,7 +38,8 @@ public:
         BroadcastClient,
         BroadcastServer,
         WalkieTalkieClient,
-        WalkieTalkieServer
+        WalkieTalkieServer,
+        WebClient
     }StreamingWorkMode;
 
     typedef enum AudioDeviceType
@@ -99,9 +100,9 @@ public:
     {
         return m_is_get_audio_enabled;
     }
-    bool isSslEnabled()
+    bool isEncryptionEnabled()
     {
-        return m_ssl_enabled;
+        return m_encryption_enabled;
     }
 
     void setNegotiationString(const QByteArray &negotiation_string)
@@ -160,9 +161,9 @@ public:
     {
         m_is_get_audio_enabled = enable;
     }
-    void setSslEnabled(bool enable)
+    void setEncryptionEnabled(bool enable)
     {
-        m_ssl_enabled = enable;
+        m_encryption_enabled = enable;
     }
 
 private:
@@ -179,7 +180,7 @@ private:
     int m_opus_bitrate;
     bool m_callback_enabled;
     bool m_is_get_audio_enabled;
-    bool m_ssl_enabled;
+    bool m_encryption_enabled;
 };
 
 QDataStream &operator<<(QDataStream &stream, StreamingInfo &info);
@@ -194,8 +195,6 @@ public:
     explicit AudioStreamingLibCore(QObject *parent = nullptr);
     ~AudioStreamingLibCore();
 
-    static bool generateAsymmetricKeys(QByteArray *private_key, QByteArray *public_key);
-
     static qint64 timeToSize(qint64 ms_time, int channel_count, int sample_size, int sample_rate);
     static qint64 timeToSize(qint64 ms_time, const QAudioFormat &format);
     static qint64 sizeToTime(qint64 bytes, int channel_count, int sample_size, int sample_rate);
@@ -208,6 +207,7 @@ public:
 
 signals:
     void connected(QHostAddress,QString);
+    void connectedToServer(QByteArray);
     void disconnected(QHostAddress);
     void pending(QHostAddress,QString);
     void inputData(QByteArray);
@@ -227,9 +227,10 @@ public slots:
     void stop();
     bool isRunning();
     DiscoverClient *discoverInstance();
-    void setKeys(const QByteArray &private_key, const QByteArray &public_key);
     void listen(quint16 port, bool auto_accept = true, const QByteArray &password = QByteArray(), int max_connections = 30);
     void connectToHost(const QString &host, quint16 port, const QByteArray &password = QByteArray());
+    void connectToPeer(const QString &ID);
+    void acceptSslCertificate();
     void acceptConnection();
     void rejectConnection();
     void writeExtraData(const QByteArray &data);

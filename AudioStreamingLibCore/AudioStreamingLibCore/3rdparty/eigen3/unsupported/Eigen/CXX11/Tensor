@@ -13,13 +13,14 @@
 
 #include "../../../Eigen/Core"
 
-#ifdef EIGEN_USE_SYCL
+#if defined(EIGEN_USE_SYCL)
 #undef min
 #undef max
 #undef isnan
 #undef isinf
 #undef isfinite
-#include <SYCL/sycl.hpp>
+#include <CL/sycl.hpp>
+#include <iostream>
 #include <map>
 #include <memory>
 #include <utility>
@@ -52,8 +53,10 @@ typedef __int32 int32_t;
 typedef unsigned __int32 uint32_t;
 typedef __int64 int64_t;
 typedef unsigned __int64 uint64_t;
+#include <windows.h>
 #else
 #include <stdint.h>
+#include <unistd.h>
 #endif
 
 #if __cplusplus > 199711 || EIGEN_COMP_MSVC >= 1900
@@ -66,6 +69,10 @@ typedef unsigned __int64 uint64_t;
 #include <mach/mach_time.h>
 #else
 #include <time.h>
+#endif
+
+#if defined(EIGEN_USE_LIBXSMM)
+#include "libxsmm.h"
 #endif
 
 #ifdef EIGEN_USE_THREADS
@@ -134,6 +141,7 @@ typedef unsigned __int64 uint64_t;
 #include "src/Tensor/TensorGenerator.h"
 #include "src/Tensor/TensorAssign.h"
 #include "src/Tensor/TensorScan.h"
+#include "src/Tensor/TensorTrace.h"
 
 #include "src/Tensor/TensorSycl.h"
 #include "src/Tensor/TensorExecutor.h"

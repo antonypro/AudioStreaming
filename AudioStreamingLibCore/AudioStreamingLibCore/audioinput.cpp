@@ -13,10 +13,14 @@ void AudioInput::startPrivate(const QAudioDeviceInfo &devinfo,
 {
     m_format = m_supported_format = format;
 
+    //Adjust to integer
+    m_supported_format.setSampleSize(16);
+    m_supported_format.setSampleType(QAudioFormat::SignedInt);
+
     //Check if format is supported by the choosen input device
-    if (!devinfo.isFormatSupported(m_format))
+    if (!devinfo.isFormatSupported(m_supported_format))
     {
-        m_supported_format = devinfo.nearestFormat(m_format);
+        m_supported_format = devinfo.nearestFormat(m_supported_format);
 
         bool found_format = true;
 
@@ -33,6 +37,8 @@ void AudioInput::startPrivate(const QAudioDeviceInfo &devinfo,
             return;
         }
     }
+
+    LIB_DEBUG_LEVEL_1("Input format used by device:" << m_supported_format);
 
     //Initialize the audio input device
     m_audio_input = new QAudioInput(devinfo, m_supported_format, this);
@@ -63,6 +69,8 @@ void AudioInput::readyReadPrivate()
 
     if (m_format != m_supported_format)
         data = convertSamplesToFloat(data, m_supported_format);
+
+    LIB_DEBUG_LEVEL_2("Got" << sizeToTime(data.size(), m_format) << "ms from input device.");
 
     //Expose the input data to worker class
     emit readyRead(data);

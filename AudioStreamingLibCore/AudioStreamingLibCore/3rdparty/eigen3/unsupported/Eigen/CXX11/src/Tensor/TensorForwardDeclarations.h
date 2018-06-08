@@ -20,7 +20,35 @@ namespace Eigen {
 // map_allocator.
 template<typename T> struct MakePointer {
   typedef T* Type;
+  typedef T& RefType;
 };
+
+namespace internal{
+template<typename A, typename B> struct Pointer_type_promotion {
+  static const bool val=false;
+};
+template<typename A> struct Pointer_type_promotion<A, A> {
+  static const bool val = true;
+};
+template<typename A, typename B> struct TypeConversion;
+#ifndef __SYCL_DEVICE_ONLY__
+template<typename A, typename B> struct TypeConversion{
+  typedef A* type;
+};
+#endif
+}
+
+#if defined(EIGEN_USE_SYCL)
+namespace TensorSycl {
+namespace internal{
+template <typename HostExpr, typename FunctorExpr, typename Tuple_of_Acc, typename Dims, typename Op, typename Index> class ReductionFunctor;
+template<typename CoeffReturnType ,typename OutAccessor, typename HostExpr, typename FunctorExpr, typename Op, typename Dims, typename Index, typename TupleType>
+class FullReductionKernelFunctor;
+}
+}
+#endif
+
+
 
 template<typename PlainObjectType, int Options_ = Unaligned, template <class> class MakePointer_ = MakePointer> class TensorMap;
 template<typename Scalar_, int NumIndices_, int Options_ = 0, typename IndexType = DenseIndex> class Tensor;
@@ -58,12 +86,13 @@ template<typename Strides, typename XprType> class TensorInflationOp;
 template<typename Generator, typename XprType> class TensorGeneratorOp;
 template<typename LeftXprType, typename RightXprType> class TensorAssignOp;
 template<typename Op, typename XprType> class TensorScanOp;
+template<typename Dims, typename XprType> class TensorTraceOp;
 
 template<typename CustomUnaryFunc, typename XprType> class TensorCustomUnaryOp;
 template<typename CustomBinaryFunc, typename LhsXprType, typename RhsXprType> class TensorCustomBinaryOp;
 
 template<typename XprType, template <class> class MakePointer_ = MakePointer> class TensorEvalToOp;
-template<typename XprType, template <class> class MakePointer_ = MakePointer> class TensorForcedEvalOp;
+template<typename XprType> class TensorForcedEvalOp;
 
 template<typename ExpressionType, typename DeviceType> class TensorDevice;
 template<typename Derived, typename Device> struct TensorEvaluator;

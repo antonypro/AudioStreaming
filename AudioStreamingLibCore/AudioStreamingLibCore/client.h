@@ -16,8 +16,12 @@ public slots:
                        const QByteArray &negotiation_string,
                        const QString &id,
                        const QByteArray &password);
+    void connectToPeer(const QString &peer_id);
     void stop();
     int write(const QByteArray &data);
+    void acceptSslCertificate();
+    void acceptConnection();
+    void rejectConnection();
 
 private slots:
     void timeout();

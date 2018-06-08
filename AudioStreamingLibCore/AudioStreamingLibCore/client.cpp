@@ -36,7 +36,7 @@ void Client::connectToHost(const QString &host, quint16 port,
 
     m_socket = new QTcpSocket(this);
 
-    setTonullptr(m_socket);
+    SETTONULLPTR(m_socket);
 
     connect(m_socket, &QTcpSocket::disconnected, this, &Client::disconnectedPrivate);
     connect(m_socket, static_cast<void(QTcpSocket::*)(QTcpSocket::SocketError)>(&QTcpSocket::error), this, &Client::errorPrivate);
@@ -46,6 +46,26 @@ void Client::connectToHost(const QString &host, quint16 port,
     m_timer->start(10 * 1000);
 
     m_socket->connectToHost(host, port);
+}
+
+void Client::connectToPeer(const QString &peer_id)
+{
+    Q_UNUSED(peer_id)
+}
+
+void Client::acceptSslCertificate()
+{
+
+}
+
+void Client::acceptConnection()
+{
+
+}
+
+void Client::rejectConnection()
+{
+
 }
 
 void Client::timeout()

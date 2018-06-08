@@ -31,6 +31,7 @@ struct traits<TensorPaddingOp<PaddingDimensions, XprType> > : public traits<XprT
   typedef typename remove_reference<Nested>::type _Nested;
   static const int NumDimensions = XprTraits::NumDimensions;
   static const int Layout = XprTraits::Layout;
+  typedef typename XprTraits::PointerType PointerType;
 };
 
 template<typename PaddingDimensions, typename XprType>
@@ -198,7 +199,14 @@ struct TensorEvaluator<const TensorPaddingOp<PaddingDimensions, ArgType>, Device
     return cost;
   }
 
-  EIGEN_DEVICE_FUNC Scalar* data() const { return NULL; }
+  EIGEN_DEVICE_FUNC EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE typename Eigen::internal::traits<XprType>::PointerType data() const { return NULL; }
+
+  /// used by sycl
+  EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE const PaddingDimensions& padding() const { return m_padding; }
+  /// used by sycl
+  EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE const Scalar& padding_value() const { return m_paddingValue; }
+  /// used by sycl
+  EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE const TensorEvaluator<ArgType, Device>& impl() const{return m_impl;}
 
  private:
   EIGEN_DEVICE_FUNC EIGEN_ALWAYS_INLINE bool isPaddingAtIndexForDim(

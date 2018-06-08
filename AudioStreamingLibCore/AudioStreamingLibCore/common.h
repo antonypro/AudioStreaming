@@ -5,7 +5,56 @@
 #include <QtMultimedia>
 #include <eigen3/Eigen/Eigen>
 
-#define setTonullptr(obj) QObject::connect(obj, &QObject::destroyed, [=]{obj = nullptr;})
+#define AES_PADDING 32
+
+#if defined(IS_TO_DEBUG_VERBOSE_1) || defined(IS_TO_DEBUG_VERBOSE_2)
+#define IS_TO_DEBUG
+
+extern QMutex record_mutex;
+extern qint64 record_count;
+
+#define DEBUG_FUNCTION(message)\
+    {\
+        record_mutex.lock();\
+        \
+        qDebug()\
+        << "Date and time(UTC):" << qPrintable(QDateTime::currentDateTimeUtc().toString("yyyy/MM/dd hh:mm:ss"))\
+        << "\nFile:" << __FILE__\
+        << "\nLine:" << __LINE__\
+        << "\nFunction:" << __FUNCTION__\
+        << "\nIndex:" << ++record_count;\
+        \
+        qDebug()\
+        << "Message:"\
+        << message\
+        << "\n";\
+        \
+        record_mutex.unlock();\
+    }
+
+#ifdef IS_TO_DEBUG_VERBOSE_1
+
+#define LIB_DEBUG_LEVEL_1(message)\
+    DEBUG_FUNCTION(message)
+#define LIB_DEBUG_LEVEL_2(message) //Does nothing
+
+#elif defined(IS_TO_DEBUG_VERBOSE_2) // IS_TO_DEBUG_VERBOSE_1
+
+#define LIB_DEBUG_LEVEL_1(message)\
+    DEBUG_FUNCTION(message)
+#define LIB_DEBUG_LEVEL_2(message)\
+    DEBUG_FUNCTION(message)
+
+#endif // IS_TO_DEBUG_VERBOSE_1
+
+#else //IS_TO_DEBUG
+
+#define LIB_DEBUG_LEVEL_1(message) //Does nothing
+#define LIB_DEBUG_LEVEL_2(message) //Does nothing
+
+#endif //IS_TO_DEBUG
+
+#define SETTONULLPTR(obj) QObject::connect(obj, &QObject::destroyed, [&]{obj = nullptr;})
 
 #ifdef OPUS
 
@@ -40,6 +89,68 @@ enum
     ExtraData,
     ExtraDataReceived
 };
+}
+
+namespace ServerCommand
+{
+enum
+{
+    PeerInfo,
+    PeerTryConnect,
+    ConnectionRequested,
+    ConnectionAnswer,
+    ConnectionInfo,
+    Port
+};
+}
+
+static inline QString cleanString(const QString &s)
+{
+    QString diacriticLetters;
+    QStringList noDiacriticLetters;
+    QStringList acceptedCharacters;
+
+    diacriticLetters = QString::fromUtf8("ŠŒŽšœžŸ¥µÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖØÙÚÛÜÝßàáâãäåæçèéêëìíîïðñòóôõöøùúûüýÿ");
+    noDiacriticLetters << "S"<<"OE"<<"Z"<<"s"<<"oe"<<"z"<<"Y"<<"Y"<<"u"<<"A"<<"A"<<"A"<<"A"<<"A"<<"A"<<"AE"<<"C"
+                        <<"E"<<"E"<<"E"<<"E"<<"I"<<"I"<<"I"<<"I"<<"D"<<"N"<<"O"<<"O"<<"O"<<"O"<<"O"<<"O"<<"U"<<"U"
+                       <<"U"<<"U"<<"Y"<<"s"<<"a"<<"a"<<"a"<<"a"<<"a"<<"a"<<"ae"<<"c"<<"e"<<"e"<<"e"<<"e"<<"i"<<"i"
+                      <<"i"<<"i"<<"o"<<"n"<<"o"<<"o"<<"o"<<"o"<<"o"<<"o"<<"u"<<"u"<<"u"<<"u"<<"y"<<"y";
+
+    acceptedCharacters << "0" << "1" << "2" << "3" << "4" << "5" << "6" << "7" << "8" << "9"
+                       << "a" << "b" << "c" << "d" << "e" << "f" << "g" << "h" << "i" << "j"
+                       << "k" << "l" << "m" << "n" << "o" << "p" << "q" << "r" << "s" << "t"
+                       << "u" << "v" << "w" << "x" << "y" << "z";
+
+    QString output_tmp;
+
+    for (int i = 0; i < s.length(); i++)
+    {
+        QChar c = s[i];
+        int dIndex = diacriticLetters.indexOf(c);
+        if (dIndex < 0)
+        {
+            output_tmp.append(c);
+        }
+        else
+        {
+            QString replacement = noDiacriticLetters[dIndex];
+            output_tmp.append(replacement);
+        }
+    }
+
+    output_tmp = output_tmp.toLower();
+
+    QString output;
+
+    for (int i = 0; i < output_tmp.length(); i++)
+    {
+        QChar c = output_tmp[i];
+
+        if (acceptedCharacters.contains(c))
+            output.append(c);
+    }
+
+    return output;
 }
 
 template <typename T>

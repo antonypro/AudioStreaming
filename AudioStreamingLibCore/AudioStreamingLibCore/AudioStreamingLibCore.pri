@@ -8,8 +8,7 @@ CONFIG +=   staticlib
 
 INCLUDEPATH += $$PWD/3rdparty
 
-SOURCES +=  $$PWD/securebytearray.cpp \
-            $$PWD/audiostreaminglibcore.cpp \
+SOURCES +=  $$PWD/audiostreaminglibcore.cpp \
             $$PWD/worker.cpp \
             $$PWD/discoverserver.cpp \
             $$PWD/discoverclient.cpp \
@@ -17,17 +16,18 @@ SOURCES +=  $$PWD/securebytearray.cpp \
             $$PWD/abstractserver.cpp \
             $$PWD/client.cpp \
             $$PWD/server.cpp \
-            $$PWD/openssllib.cpp \
+            $$PWD/encryptedclient.cpp \
+            $$PWD/encryptedserver.cpp \
+            $$PWD/webclient.cpp \
             $$PWD/sslclient.cpp \
-            $$PWD/sslserver.cpp \
+            $$PWD/openssllib.cpp \
             $$PWD/tcpserver.cpp \
             $$PWD/audioinput.cpp \
             $$PWD/audiooutput.cpp \
             $$PWD/flowcontrol.cpp \
             $$PWD/levelmeter.cpp
 
-HEADERS +=  $$PWD/securebytearray.h \
-            $$PWD/audiostreaminglibcore.h \
+HEADERS +=  $$PWD/audiostreaminglibcore.h \
             $$PWD/worker.h \
             $$PWD/discoverserver.h \
             $$PWD/discoverclient.h \
@@ -35,9 +35,11 @@ HEADERS +=  $$PWD/securebytearray.h \
             $$PWD/abstractserver.h \
             $$PWD/client.h \
             $$PWD/server.h \
-            $$PWD/openssllib.h \
+            $$PWD/encryptedserver.h \
+            $$PWD/encryptedclient.h \
+            $$PWD/webclient.h \
             $$PWD/sslclient.h \
-            $$PWD/sslserver.h \
+            $$PWD/openssllib.h \
             $$PWD/tcpserver.h \
             $$PWD/audioinput.h \
             $$PWD/audiooutput.h \
@@ -77,13 +79,15 @@ SOURCES += $$MACOS_R8BRAIN_RESAMPLER_INCLUDE/r8bbase.cpp
 }
 
 #Copy header files
+
+createdir.commands = $$sprintf($$QMAKE_MKDIR_CMD, $$shell_path($$PWD/../include))
 copydata1.commands = $(COPY_FILE) $$shell_path($$PWD/AudioStreamingLibCore) $$shell_path($$PWD/../include)
 copydata2.commands = $(COPY_FILE) $$shell_path($$PWD/audiostreaminglibcore.h) $$shell_path($$PWD/../include)
 copydata3.commands = $(COPY_FILE) $$shell_path($$PWD/discoverclient.h) $$shell_path($$PWD/../include)
 
-first.depends = $(first) copydata1 copydata2 copydata3
+first.depends = $(first) createdir copydata1 copydata2 copydata3
 
-QMAKE_EXTRA_TARGETS += first copydata1 copydata2 copydata3
+QMAKE_EXTRA_TARGETS += first createdir copydata1 copydata2 copydata3
 
 #Set output directory
 

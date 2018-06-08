@@ -580,7 +580,7 @@ DoublePacket<Packet> padd(const DoublePacket<Packet> &a, const DoublePacket<Pack
 }
 
 template<typename Packet>
-const DoublePacket<Packet>& predux_downto4(const DoublePacket<Packet> &a)
+const DoublePacket<Packet>& predux_half_dowto4(const DoublePacket<Packet> &a)
 {
   return a;
 }
@@ -1523,7 +1523,7 @@ void gebp_kernel<LhsScalar,RhsScalar,Index,DataMapper,mr,nr,ConjugateLhs,Conjuga
           prefetch(&blA[0]);
           const RhsScalar* blB = &blockB[j2*strideB+offsetB*nr];
 
-          // The following piece of code wont work for 512 bit registers
+          // The following piece of code won't work for 512 bit registers
           // Moreover, if LhsProgress==8 it assumes that there is a half packet of the same size
           // as nr (which is currently 4) for the return type.
           typedef typename unpacket_traits<SResPacket>::half SResPacketHalf;
@@ -1596,13 +1596,13 @@ void gebp_kernel<LhsScalar,RhsScalar,Index,DataMapper,mr,nr,ConjugateLhs,Conjuga
                 SRhsPacketHalf b0;
                 straits.loadLhsUnaligned(blB, a0);
                 straits.loadRhs(blA, b0);
-                SAccPacketHalf c0 = predux_downto4(C0);
+                SAccPacketHalf c0 = predux_half_dowto4(C0);
                 straits.madd(a0,b0,c0,b0);
                 straits.acc(c0, alphav, R);
               }
               else
               {
-                straits.acc(predux_downto4(C0), alphav, R);
+                straits.acc(predux_half_dowto4(C0), alphav, R);
               }
               res.scatterPacket(i, j2, R);
             }
@@ -1924,7 +1924,7 @@ EIGEN_DONT_INLINE void gemm_pack_rhs<Scalar, Index, DataMapper, nr, ColMajor, Co
 //       const Scalar* b6 = &rhs[(j2+6)*rhsStride];
 //       const Scalar* b7 = &rhs[(j2+7)*rhsStride];
 //       Index k=0;
-//       if(PacketSize==8) // TODO enbale vectorized transposition for PacketSize==4
+//       if(PacketSize==8) // TODO enable vectorized transposition for PacketSize==4
 //       {
 //         for(; k<peeled_k; k+=PacketSize) {
 //           PacketBlock<Packet> kernel;

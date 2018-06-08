@@ -7,8 +7,9 @@
 #include "discoverserver.h"
 #include "server.h"
 #include "client.h"
-#include "sslserver.h"
-#include "sslclient.h"
+#include "encryptedserver.h"
+#include "encryptedclient.h"
+#include "webclient.h"
 #include "audioinput.h"
 #include "audiooutput.h"
 #include "flowcontrol.h"
@@ -28,6 +29,7 @@ public:
 
 signals:
     void connected(QHostAddress,QString);
+    void connectedToServer(QByteArray);
     void disconnected(QHostAddress);
     void pending(QHostAddress,QString);
     void inputData(QByteArray);
@@ -43,9 +45,10 @@ signals:
 
 public slots:
     void start(const StreamingInfo &streaming_info);
-    void setKeys(const QByteArray &private_key, const QByteArray &public_key);
     void listen(quint16 port, bool auto_accept, const QByteArray &password, int max_connections);
     void connectToHost(const QString &host, quint16 port, const QByteArray &password);
+    void connectToPeer(const QString &ID);
+    void acceptSslCertificate();
     void acceptConnection();
     void rejectConnection();
     void writeExtraData(const QByteArray &data);
@@ -69,12 +72,16 @@ private slots:
     void serverClientDisconencted(const PeerData &pd);
     void clientConencted(const PeerData &pd, const QString &id);
     void clientDisconencted(const PeerData &pd);
+    void webClientConencted(const QByteArray &hash);
+    void webClientConnectedToPeer(const PeerData &pd, const QString &id);
+    void webClientDisconencted(const PeerData &pd);
     void posProcessedInput(const QByteArray &data);
     void preProcessOutput(const QByteArray &data);
     void posProcessedOutput(const QByteArray &data);
     void flowControl(int bytes);
     void processServerInput(const PeerData &pd);
     void processClientInput(const PeerData &pd);
+    void processWebClientInput(const PeerData &pd);
     QByteArray createHeader();
     void header(QByteArray data,
                 QAudioFormat *refInputAudioFormat,
@@ -106,6 +113,7 @@ private:
     bool m_callback_enabled;
 
     QHash<qintptr, int> m_hash_pkts_pending;
+    QHash<qintptr, bool> m_hash_limit_reached;
     QHash<qintptr, int> m_hash_max_pkts_pending;
 
 #ifdef OPUS

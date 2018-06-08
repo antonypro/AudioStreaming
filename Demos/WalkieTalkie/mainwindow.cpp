@@ -2,6 +2,16 @@
 
 #define TITLE "Walkie Talkie Demo"
 
+QPlainTextEdit *debug_edit = nullptr;
+
+void messageHandler(QtMsgType type, const QMessageLogContext &context, const QString &msg)
+{
+    Q_UNUSED(type)
+    Q_UNUSED(context)
+
+    QMetaObject::invokeMethod(debug_edit, "appendPlainText", Q_ARG(QString, msg));
+}
+
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 {
     setWindowTitle(TITLE);
@@ -17,9 +27,88 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 
     m_paused = true;
 
-    //Client
+    //Common
 
     comboboxaudioinput = new QComboBox(this);
+    comboboxaudiooutput = new QComboBox(this);
+
+    comboboxaudioinput->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    comboboxaudiooutput->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+
+    //WebClient
+
+    buttonconnecttopeer = new QPushButton(this);
+    buttonconnecttopeer->setText("Connect to peer");
+    buttonconnecttopeer->setEnabled(false);
+
+    labelservertweb = new QLabel(this);
+    labelservertweb->setText("Server:");
+
+    lineserverweb = new QLineEdit(this);
+    lineserverweb->setText("127.0.0.1");
+
+    labelportweb = new QLabel(this);
+    labelportweb->setText("Port:");
+
+    lineportweb = new QLineEdit(this);
+    lineportweb->setMinimumWidth(100);
+    lineportweb->setText("1024");
+
+    buttonstartweb = new QPushButton(this);
+    buttonstartweb->setText("Connect to server");
+
+    labelwebid = new QLabel(this);
+    labelwebid->setText("ID:");
+
+    linewebid = new QLineEdit(this);
+
+    labelwebpassword = new QLabel(this);
+    labelwebpassword->setText("Password:");
+
+    linewebpassword = new QLineEdit(this);
+    linewebpassword->setEchoMode(QLineEdit::Password);
+
+    labelsamplerateweb = new QLabel(this);
+    labelsamplerateweb->setText("Sample rate:");
+    linesamplerateweb = new QLineEdit(this);
+    linesamplerateweb->setText("44100");
+
+    labelchannelsweb = new QLabel(this);
+    labelchannelsweb->setText("Channels:");
+    linechannelsweb = new QLineEdit(this);
+    linechannelsweb->setText("1");
+
+    labelbuffertimeweb = new QLabel(this);
+    labelbuffertimeweb->setText("Buffer time (ms):");
+    linebuffertimeweb = new QLineEdit(this);
+    linebuffertimeweb->setText("300");
+
+    widget1 = new QWidget(this);
+
+    {
+        QGridLayout *layout = new QGridLayout(widget1);
+
+        layout->addWidget(buttonconnecttopeer, 0, 0, 1, 2);
+        layout->addWidget(labelservertweb, 1, 0);
+        layout->addWidget(lineserverweb, 1, 1);
+        layout->addWidget(labelportweb, 2, 0);
+        QGridLayout *layout1 = new QGridLayout();
+        layout1->addWidget(lineportweb, 1, 0);
+        layout1->addWidget(buttonstartweb, 1, 1);
+        layout->addLayout(layout1, 2, 1);
+        layout->addWidget(labelwebid, 3, 0);
+        layout->addWidget(linewebid, 3, 1);
+        layout->addWidget(labelwebpassword, 4, 0);
+        layout->addWidget(linewebpassword, 4, 1);
+        layout->addWidget(labelsamplerateweb, 5, 0);
+        layout->addWidget(linesamplerateweb, 5, 1);
+        layout->addWidget(labelchannelsweb, 6, 0);
+        layout->addWidget(linechannelsweb, 6, 1);
+        layout->addWidget(labelbuffertimeweb, 7, 0);
+        layout->addWidget(linebuffertimeweb, 7, 1);
+    }
+
+    //Client
 
     labelhost = new QLabel(this);
     linehost = new QLineEdit(this);
@@ -50,10 +139,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     lineclientpassword = new QLineEdit(this);
     lineclientpassword->setEchoMode(QLineEdit::Password);
 
-    widget1 = new QWidget(this);
+    widget2 = new QWidget(this);
 
     {
-        QGridLayout *layout = new QGridLayout(widget1);
+        QGridLayout *layout = new QGridLayout(widget2);
 
         layout->addWidget(labelhost, 0, 0, 1, 1);
         layout->addWidget(linehost, 0, 1, 1, 2);
@@ -78,6 +167,17 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     buttonstartserver = new QPushButton(this);
     buttonstartserver->setText("Start Server");
 
+    labelserverid = new QLabel(this);
+    labelserverid->setText("ID:");
+
+    lineserverid = new QLineEdit(this);
+
+    labelserverpassword = new QLabel(this);
+    labelserverpassword->setText("Password:");
+
+    lineserverpassword = new QLineEdit(this);
+    lineserverpassword->setEchoMode(QLineEdit::Password);
+
     labelsamplerate = new QLabel(this);
     labelsamplerate->setText("Sample rate:");
     linesamplerate = new QLineEdit(this);
@@ -93,21 +193,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     linebuffertime = new QLineEdit(this);
     linebuffertime->setText("300");
 
-    labelserverid = new QLabel(this);
-    labelserverid->setText("ID:");
-
-    lineserverid = new QLineEdit(this);
-
-    labelserverpassword = new QLabel(this);
-    labelserverpassword->setText("Password:");
-
-    lineserverpassword = new QLineEdit(this);
-    lineserverpassword->setEchoMode(QLineEdit::Password);
-
-    widget2 = new QWidget(this);
+    widget3 = new QWidget(this);
 
     {
-        QGridLayout *layout = new QGridLayout(widget2);
+        QGridLayout *layout = new QGridLayout(widget3);
 
         layout->addWidget(labelportserver, 0, 0);
         QGridLayout *layout1 = new QGridLayout();
@@ -138,6 +227,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     tabwidget = new QTabWidget(this);
 
     scrollclientserver = new QScrollArea(this);
+
 #if !defined(Q_OS_ANDROID) && !defined(Q_OS_IOS) && !defined(Q_OS_WINPHONE)
     scrollclientserver->setWidgetResizable(true);
     scrollclientserver->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
@@ -146,7 +236,24 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     QWidget *widgetserverclient = new QWidget(this);
     QGridLayout *layoutserverclient = new QGridLayout(widgetserverclient);
 
-    layoutserverclient->addWidget(comboboxaudioinput, 0, 0);
+    layoutserverclient->addWidget(new QLabel("Input device:", this), 0, 0);
+    layoutserverclient->addWidget(comboboxaudioinput, 0, 1);
+    layoutserverclient->addWidget(new QLabel("Output device:", this), 1, 0);
+    layoutserverclient->addWidget(comboboxaudiooutput, 1, 1);
+
+    {
+        QWidget *widget = new QWidget(this);
+        QGridLayout *layout = new QGridLayout(widget);
+        layout->setMargin(0);
+
+        QGroupBox *box1 = new QGroupBox(widget);
+        box1->setTitle("Web Client");
+        QGridLayout *layout1 = new QGridLayout(box1);
+        layout1->addWidget(widget1, 0, 0);
+
+        layout->addWidget(box1, 0, 0);
+        layoutserverclient->addWidget(widget, 2, 0, 1, 2);
+    }
 
     {
         QWidget *widget = new QWidget(this);
@@ -156,10 +263,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
         QGroupBox *box1 = new QGroupBox(widget);
         box1->setTitle("Client");
         QGridLayout *layout1 = new QGridLayout(box1);
-        layout1->addWidget(widget1, 0, 0);
+        layout1->addWidget(widget2, 0, 0);
 
         layout->addWidget(box1, 0, 0);
-        layoutserverclient->addWidget(widget, 1, 0);
+        layoutserverclient->addWidget(widget, 3, 0, 1, 2);
     }
 
     {
@@ -170,10 +277,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
         QGroupBox *box1 = new QGroupBox(widget);
         box1->setTitle("Server");
         QGridLayout *layout1 = new QGridLayout(box1);
-        layout1->addWidget(widget2, 0, 0);
+        layout1->addWidget(widget3, 0, 0);
 
         layout->addWidget(box1, 0, 0);
-        layoutserverclient->addWidget(widget, 2, 0);
+        layoutserverclient->addWidget(widget, 4, 0, 1, 2);
     }
 
     scrollclientserver->setWidget(widgetserverclient);
@@ -204,6 +311,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     buttonrecord = new QPushButton(this);
     buttonrecordstop = new QPushButton(this);
     lcdtime = new QLCDNumber(this);
+    boxautostart = new QCheckBox("Auto start recording when connected", this);
 
     QWidget *recorder = new QWidget(this);
 
@@ -214,12 +322,17 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     layout_record->addWidget(buttonrecord, 0, 3);
     layout_record->addWidget(buttonrecordstop, 0, 4);
     layout_record->addWidget(lcdtime, 1, 0, 1, 5);
+    layout_record->addWidget(boxautostart, 2, 0, 1, 5);
+
+    texteditlog = new QPlainTextEdit(this);
+    debug_edit = texteditlog;
 
     tabwidget->addTab(scrollclientserver, "Client Server");
     tabwidget->addTab(listwidgetpeers, "Search");
     tabwidget->addTab(widgetchat, "Chat");
     tabwidget->addTab(recorder, "Record");
     tabwidget->addTab(texteditsettings, "Settings");
+    tabwidget->addTab(texteditlog, "Log");
 
     connect(tabwidget, &QTabWidget::currentChanged, this, &MainWindow::currentChanged);
 
@@ -228,13 +341,18 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 
     connect(slidervolume, &QSlider::valueChanged, this, &MainWindow::sliderVolumeValueChanged);
 
+    connect(buttonstartweb, &QPushButton::clicked, this, &MainWindow::webClient);
     connect(buttonconnect, &QPushButton::clicked, this, &MainWindow::client);
     connect(buttonstartserver, &QPushButton::clicked, this, &MainWindow::server);
+
+    connect(buttonconnecttopeer, &QPushButton::clicked, this, &MainWindow::connectToPeer);
 
     linechat->blockSignals(true);
 
     buttonsendchat->setEnabled(false);
     buttonsendchat->setDefault(true);
+
+    texteditlog->setReadOnly(true);
 
     resetRecordPage();
 
@@ -247,27 +365,44 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 
     QGridLayout *mainlayout = new QGridLayout(mainwidget);
 
-    mainlayout->addWidget(levelinput, 0, 0, 3, 1);
-    mainlayout->addWidget(tabwidget, 0, 1, 1, 3);
+    mainlayout->addWidget(levelinput, 0, 0, 4, 1);
+    mainlayout->addWidget(tabwidget, 0, 1, 1, 1);
     mainlayout->addWidget(boxinputmuted, 1, 1, 1, 1);
-    mainlayout->addWidget(labelvolume, 1, 2, 1, 1);
-    mainlayout->addItem(new QSpacerItem(0, 0, QSizePolicy::Expanding, QSizePolicy::Minimum), 1, 3, 1, 1);
-    mainlayout->addWidget(slidervolume, 2, 1, 1, 3);
-    mainlayout->addWidget(leveloutput, 0, 4, 3, 1);
+    mainlayout->addWidget(labelvolume, 2, 1, 1, 1);
+    mainlayout->addWidget(slidervolume, 3, 1, 1, 1);
+    mainlayout->addWidget(leveloutput, 0, 4, 4, 1);
 
     //Recorder
     connect(buttonsearch, &QPushButton::clicked, this, &MainWindow::setRecordPath);
     connect(buttonrecord, &QPushButton::clicked, this, &MainWindow::startPauseRecord);
     connect(buttonrecordstop, &QPushButton::clicked, this, &MainWindow::stopRecord);
 
+    widget1->setFixedHeight(widget1->sizeHint().height());
+    widget2->setFixedHeight(widget2->sizeHint().height());
+    widget3->setFixedHeight(widget3->sizeHint().height());
+
     slidervolume->setValue(100);
 
     setCentralWidget(mainwidget);
+
+    connect(linewebid, &QLineEdit::textChanged, [=](const QString &text){
+        linewebid->blockSignals(true);
+        linewebid->setText(cleanString(text));
+        linewebid->blockSignals(false);
+    });
+
+    connect(linewebpassword, &QLineEdit::textChanged, [=](const QString &text){
+        linewebpassword->blockSignals(true);
+        linewebpassword->setText(cleanString(text));
+        linewebpassword->blockSignals(false);
+    });
+
+    qInstallMessageHandler(messageHandler);
 }
 
 MainWindow::~MainWindow()
 {
-
+    qInstallMessageHandler(0);
 }
 
 void MainWindow::currentChanged(int index)
@@ -330,6 +465,83 @@ void MainWindow::selectPeer(QListWidgetItem *item)
     tabwidget->setCurrentIndex(0);
 }
 
+void MainWindow::webClient()
+{
+    if (m_audio_lib)
+    {
+        buttonrecord->setEnabled(false);
+
+        m_audio_lib->stop();
+
+        return;
+    }
+
+    m_audio_lib = new AudioStreamingLibCore(this);
+
+    connect(m_audio_lib, &AudioStreamingLibCore::destroyed, [&]{m_audio_lib = nullptr;});
+
+    QByteArray password = linewebpassword->text().toLatin1();
+
+    QAudioDeviceInfo inputdevinfo = comboboxaudioinput->currentData().value<QAudioDeviceInfo>();
+    QAudioDeviceInfo outputdevinfo = comboboxaudiooutput->currentData().value<QAudioDeviceInfo>();
+
+    QAudioFormat format;
+    format.setSampleSize(32);
+    format.setSampleRate(linesamplerateweb->text().toInt());
+    format.setChannelCount(linechannelsweb->text().toInt());
+    format.setSampleType(QAudioFormat::Float);
+    format.setByteOrder(QAudioFormat::LittleEndian);
+
+    StreamingInfo info;
+
+    info.setInputAudioFormat(format);
+    info.setInputDeviceInfo(inputdevinfo);
+    info.setOutputDeviceInfo(outputdevinfo);
+    info.setWorkMode(StreamingInfo::StreamingWorkMode::WebClient);
+    info.setTimeToBuffer(linebuffertime->text().toInt());
+    info.setEncryptionEnabled(!password.isEmpty());
+    info.setGetAudioEnabled(true);
+    info.setNegotiationString(QByteArray("WalkieTalkieTCPDemo"));
+    info.setID(linewebid->text().trimmed());
+
+    buttonrecord->setEnabled(true);
+
+    connect(m_audio_lib, &AudioStreamingLibCore::error, this, &MainWindow::error);
+
+    connect(m_audio_lib, &AudioStreamingLibCore::inputLevel, levelinput, &LevelWidget::setlevel);
+    connect(m_audio_lib, &AudioStreamingLibCore::outputLevel, leveloutput, &LevelWidget::setlevel);
+
+    connect(m_audio_lib, &AudioStreamingLibCore::connectedToServer, this, &MainWindow::connectedToServer);
+    connect(m_audio_lib, &AudioStreamingLibCore::connected, this, &MainWindow::webClientConnected);
+    connect(m_audio_lib, &AudioStreamingLibCore::disconnected, this, &MainWindow::webClientDisconnected);
+
+    connect(m_audio_lib, &AudioStreamingLibCore::pending, this, &MainWindow::pending);
+
+    connect(m_audio_lib, &AudioStreamingLibCore::adjustSettings, this, &MainWindow::adjustSettings);
+
+    connect(m_audio_lib, &AudioStreamingLibCore::extraData, this, &MainWindow::receiveText);
+
+    connect(m_audio_lib, &AudioStreamingLibCore::finished, this, &MainWindow::finished);
+
+    connect(boxinputmuted, &QCheckBox::toggled, m_audio_lib, &AudioStreamingLibCore::setInputMuted);
+
+    m_audio_lib->start(info);
+
+    m_audio_lib->setInputMuted(boxinputmuted->isChecked());
+
+    m_audio_lib->setVolume(slidervolume->value());
+
+    m_audio_lib->connectToHost(lineserverweb->text(), lineportserver->text().toInt(), password);
+
+    webClientStarted(false);
+
+    buttonstartweb->setText("Connecting...");
+
+    buttonstartweb->setEnabled(false);
+
+    tabwidget->setTabEnabled(1, false);
+}
+
 void MainWindow::client()
 {
     if (m_audio_lib)
@@ -337,22 +549,25 @@ void MainWindow::client()
         buttonrecord->setEnabled(false);
 
         m_audio_lib->stop();
+
         return;
     }
 
     m_audio_lib = new AudioStreamingLibCore(this);
 
-    connect(m_audio_lib, &AudioStreamingLibCore::destroyed, [=]{m_audio_lib = nullptr;});
+    connect(m_audio_lib, &AudioStreamingLibCore::destroyed, [&]{m_audio_lib = nullptr;});
 
     QByteArray password = lineclientpassword->text().toLatin1();
 
-    QAudioDeviceInfo devinfo = comboboxaudioinput->itemData(comboboxaudioinput->currentIndex()).value<QAudioDeviceInfo>();
+    QAudioDeviceInfo inputdevinfo = comboboxaudioinput->currentData().value<QAudioDeviceInfo>();
+    QAudioDeviceInfo outputdevinfo = comboboxaudiooutput->currentData().value<QAudioDeviceInfo>();
 
     StreamingInfo info;
 
-    info.setInputDeviceInfo(devinfo);
+    info.setInputDeviceInfo(inputdevinfo);
+    info.setOutputDeviceInfo(outputdevinfo);
     info.setWorkMode(StreamingInfo::StreamingWorkMode::WalkieTalkieClient);
-    info.setSslEnabled(!password.isEmpty());
+    info.setEncryptionEnabled(!password.isEmpty());
     info.setGetAudioEnabled(true);
     info.setNegotiationString(QByteArray("WalkieTalkieTCPDemo"));
     info.setID(lineclientid->text().trimmed());
@@ -399,16 +614,18 @@ void MainWindow::server()
         buttonrecord->setEnabled(false);
 
         m_audio_lib->stop();
+
         return;
     }
 
     m_audio_lib = new AudioStreamingLibCore(this);
 
-    connect(m_audio_lib, &AudioStreamingLibCore::destroyed, [=]{m_audio_lib = nullptr;});
+    connect(m_audio_lib, &AudioStreamingLibCore::destroyed, [&]{m_audio_lib = nullptr;});
 
     QByteArray password = lineserverpassword->text().toLatin1();
 
-    QAudioDeviceInfo devinfo = comboboxaudioinput->itemData(comboboxaudioinput->currentIndex()).value<QAudioDeviceInfo>();
+    QAudioDeviceInfo inputdevinfo = comboboxaudioinput->currentData().value<QAudioDeviceInfo>();
+    QAudioDeviceInfo outputdevinfo = comboboxaudiooutput->currentData().value<QAudioDeviceInfo>();
 
     QAudioFormat format;
     format.setSampleSize(32);
@@ -420,19 +637,14 @@ void MainWindow::server()
     StreamingInfo info;
 
     info.setInputAudioFormat(format);
-    info.setInputDeviceInfo(devinfo);
+    info.setInputDeviceInfo(inputdevinfo);
+    info.setOutputDeviceInfo(outputdevinfo);
     info.setWorkMode(StreamingInfo::StreamingWorkMode::WalkieTalkieServer);
     info.setTimeToBuffer(linebuffertime->text().toInt());
-    info.setSslEnabled(!password.isEmpty());
+    info.setEncryptionEnabled(!password.isEmpty());
     info.setGetAudioEnabled(true);
     info.setNegotiationString(QByteArray("WalkieTalkieTCPDemo"));
     info.setID(lineserverid->text().trimmed());
-
-    QByteArray private_key;
-    QByteArray public_key;
-
-    if (info.isSslEnabled())
-        AudioStreamingLibCore::generateAsymmetricKeys(&private_key, &public_key);
 
     buttonrecord->setEnabled(true);
 
@@ -460,8 +672,6 @@ void MainWindow::server()
 
     m_audio_lib->setVolume(slidervolume->value());
 
-    m_audio_lib->setKeys(private_key, public_key);
-
     m_audio_lib->listen(lineportserver->text().toInt(), false, password);
 
     serverStarted(false);
@@ -481,25 +691,28 @@ void MainWindow::sliderVolumeValueChanged(int value)
     labelvolume->setText(str);
 }
 
-void MainWindow::getDevInfo()
+void MainWindow::webClientStarted(bool enable)
 {
-    QList<QAudioDeviceInfo> devices = QAudioDeviceInfo::availableDevices(QAudio::AudioInput);
+    comboboxaudioinput->setEnabled(enable);
+    comboboxaudiooutput->setEnabled(enable);
+    widget2->setEnabled(enable);
+    widget3->setEnabled(enable);
 
-    if (!devices.isEmpty())
-    {
-        for (int i = 0; i < devices.size(); i++)
-            comboboxaudioinput->addItem(devices.at(i).deviceName(), qVariantFromValue(devices.at(i)));
-    }
-    else
-    {
-        QMessageBox::warning(this, "Error", "No input device found!");
-    }
+    lineserverweb->setEnabled(enable);
+    lineportweb->setEnabled(enable);
+    linewebid->setEnabled(enable);
+    linewebpassword->setEnabled(enable);
+    linesamplerateweb->setEnabled(enable);
+    linechannelsweb->setEnabled(enable);
+    linebuffertimeweb->setEnabled(enable);
 }
 
 void MainWindow::clientStarted(bool enable)
 {
     comboboxaudioinput->setEnabled(enable);
-    widget2->setEnabled(enable);
+    comboboxaudiooutput->setEnabled(enable);
+    widget1->setEnabled(enable);
+    widget3->setEnabled(enable);
     linehost->setEnabled(enable);
     lineport->setEnabled(enable);
     lineclientid->setEnabled(enable);
@@ -509,7 +722,9 @@ void MainWindow::clientStarted(bool enable)
 void MainWindow::serverStarted(bool enable)
 {
     comboboxaudioinput->setEnabled(enable);
+    comboboxaudiooutput->setEnabled(enable);
     widget1->setEnabled(enable);
+    widget2->setEnabled(enable);
     lineportserver->setEnabled(enable);
     linesamplerate->setEnabled(enable);
     linechannels->setEnabled(enable);
@@ -518,9 +733,67 @@ void MainWindow::serverStarted(bool enable)
     lineserverpassword->setEnabled(enable);
 }
 
+void MainWindow::connectedToServer(const QByteArray &hash)
+{
+    QString str = QString("Do you trust this certificate?\nFingerprint: %0").arg(QString(hash));
+
+    int result = QMessageBox::question(this, "Accept?", str);
+
+    if (!m_audio_lib)
+        return;
+
+    if (result != QMessageBox::Yes)
+    {
+        m_audio_lib->stop();
+
+        return;
+    }
+
+    m_audio_lib->acceptSslCertificate();
+
+    buttonconnecttopeer->setEnabled(true);
+
+    buttonstartweb->setText("Disconnect from server");
+
+    buttonstartweb->setEnabled(true);
+}
+
+void MainWindow::connectToPeer()
+{
+    QString id = QInputDialog::getText(this, "Set ID", "Select ID to connect:");
+
+    if (!id.isEmpty())
+        m_audio_lib->connectToPeer(id);
+}
+
+void MainWindow::webClientConnected(const QHostAddress &address, const QString &id)
+{
+    m_peer = QString("%0 - %1").arg(QHostAddress(address.toIPv4Address()).toString()).arg(id);
+
+    QString title = QString("Connected to: %0 - %1").arg(m_peer).arg(TITLE);
+
+    setWindowTitle(title);
+
+    buttonconnecttopeer->setEnabled(false);
+
+    buttonstartweb->setText("Disconnect from peer");
+    buttonstartweb->setEnabled(true);
+
+    linechat->blockSignals(false);
+    buttonsendchat->setEnabled(true);
+
+    boxautostart->setEnabled(false);
+
+    if (boxautostart->isChecked())
+        startPauseRecord(); //Auto start recording when connected
+}
+
 void MainWindow::clientConnected(const QHostAddress &address, const QString &id)
 {
-    m_peer = !id.isEmpty() ? id : QHostAddress(address.toIPv4Address()).toString();
+    if (!id.isEmpty())
+        m_peer = QString("%0 - %1").arg(QHostAddress(address.toIPv4Address()).toString()).arg(id);
+    else
+        m_peer = QString("%0").arg(QHostAddress(address.toIPv4Address()).toString());
 
     QString title = QString("Connected to: %0 - %1").arg(m_peer).arg(TITLE);
 
@@ -531,11 +804,19 @@ void MainWindow::clientConnected(const QHostAddress &address, const QString &id)
 
     linechat->blockSignals(false);
     buttonsendchat->setEnabled(true);
+
+    boxautostart->setEnabled(false);
+
+    if (boxautostart->isChecked())
+        startPauseRecord(); //Auto start recording when connected
 }
 
 void MainWindow::serverConnected(const QHostAddress &address, const QString &id)
 {
-    m_peer = !id.isEmpty() ? id : QHostAddress(address.toIPv4Address()).toString();
+    if (!id.isEmpty())
+        m_peer = QString("%0 - %1").arg(QHostAddress(address.toIPv4Address()).toString()).arg(id);
+    else
+        m_peer = QString("%0").arg(QHostAddress(address.toIPv4Address()).toString());
 
     QString title = QString("Connected to: %0 - %1").arg(m_peer).arg(TITLE);
 
@@ -545,12 +826,39 @@ void MainWindow::serverConnected(const QHostAddress &address, const QString &id)
 
     linechat->blockSignals(false);
     buttonsendchat->setEnabled(true);
+
+    boxautostart->setEnabled(false);
+
+    if (boxautostart->isChecked())
+        startPauseRecord(); //Auto start recording when connected
+}
+
+void MainWindow::webClientDisconnected()
+{
+    if (m_audio_lib)
+        m_audio_lib->stop();
+
+    stopRecord();
+    resetRecordPage();
+
+    boxautostart->setEnabled(true);
+
+    setWindowTitle(TITLE);
+
+    buttonconnecttopeer->setEnabled(false);
+
+    m_peer = QString();
 }
 
 void MainWindow::clientDisconnected()
 {
     if (m_audio_lib)
         m_audio_lib->stop();
+
+    stopRecord();
+    resetRecordPage();
+
+    boxautostart->setEnabled(true);
 
     setWindowTitle(TITLE);
 
@@ -561,6 +869,11 @@ void MainWindow::serverDisconnected()
 {
     linechat->blockSignals(true);
     buttonsendchat->setEnabled(false);
+
+    stopRecord();
+    resetRecordPage();
+
+    boxautostart->setEnabled(true);
 
     setWindowTitle(TITLE);
 
@@ -575,6 +888,9 @@ void MainWindow::pending(const QHostAddress &address, const QString &id)
         str.append(QString("\nID: %0").arg(id));
 
     int result = QMessageBox::question(this, "Pending connection", str);
+
+    if (!m_audio_lib)
+        return;
 
     if (result == QMessageBox::Yes)
         m_audio_lib->acceptConnection();
@@ -648,7 +964,7 @@ void MainWindow::startPauseRecord()
 
             m_audio_recorder = new AudioRecorder(linerecordpath->text(), m_format, m_audio_lib);
 
-            connect(m_audio_recorder, &AudioRecorder::destroyed, [=]{m_audio_recorder = nullptr;});
+            connect(m_audio_recorder, &AudioRecorder::destroyed, [&]{m_audio_recorder = nullptr;});
 
             if (!m_audio_recorder->open())
             {
@@ -693,8 +1009,7 @@ void MainWindow::stopRecord()
 
     m_paused = true;
 
-    QTime time(0, 0, 0);
-    lcdtime->display(time.toString(Qt::ISODate));
+    lcdtime->display("--:--");
 
     m_format = QAudioFormat();
 }
@@ -708,8 +1023,7 @@ void MainWindow::resetRecordPage()
     buttonrecord->setEnabled(false);
     buttonrecordstop->setEnabled(false);
 
-    QTime time(0, 0, 0);
-    lcdtime->display(time.toString(Qt::ISODate));
+    lcdtime->display("--:--");
 }
 
 void MainWindow::writeLocalToBuffer(const QByteArray &data)
@@ -761,7 +1075,7 @@ void MainWindow::writeText()
     linechat->clear();
 
     QString localtext = QString("You wrote at %0:\n%1\n")
-            .arg(QTime::currentTime().toString(Qt::SystemLocaleLongDate)).arg(text);
+            .arg(QDateTime::currentDateTime().toString(Qt::SystemLocaleShortDate)).arg(text);
 
     texteditchat->appendPlainText(localtext);
 
@@ -773,7 +1087,7 @@ void MainWindow::receiveText(const QByteArray &data)
     QString text = QLatin1String(data);
 
     QString localtext = QString("%0 wrote at %1:\n%2\n").arg(m_peer)
-            .arg(QTime::currentTime().toString(Qt::SystemLocaleLongDate)).arg(text);
+            .arg(QDateTime::currentDateTime().toString(Qt::SystemLocaleShortDate)).arg(text);
 
     texteditchat->appendPlainText(localtext);
 
@@ -785,6 +1099,14 @@ void MainWindow::finished()
     if (!isVisible())
         return;
 
+    stopRecord();
+    resetRecordPage();
+
+    boxautostart->setEnabled(true);
+
+    buttonconnecttopeer->setEnabled(false);
+
+    webClientStarted(true);
     clientStarted(true);
     serverStarted(true);
 
@@ -792,9 +1114,15 @@ void MainWindow::finished()
     buttonsendchat->setEnabled(false);
 
     texteditsettings->clear();
+
     buttonconnect->setText("Connect");
     buttonconnect->setEnabled(true);
+
     buttonstartserver->setText("Start Server");
+    buttonstartserver->setEnabled(true);
+
+    buttonstartweb->setText("Connect to server");
+    buttonstartweb->setEnabled(true);
 
     m_peer = QString();
 
@@ -810,4 +1138,30 @@ void MainWindow::finished()
     m_peer_audio.clear();
 
     setWindowTitle(TITLE);
+}
+
+void MainWindow::getDevInfo()
+{
+    QList<QAudioDeviceInfo> inputdevices = QAudioDeviceInfo::availableDevices(QAudio::AudioInput);
+    QList<QAudioDeviceInfo> outputdevices = QAudioDeviceInfo::availableDevices(QAudio::AudioOutput);
+
+    if (!inputdevices.isEmpty())
+    {
+        for (int i = 0; i < inputdevices.size(); i++)
+            comboboxaudioinput->addItem(inputdevices.at(i).deviceName(), qVariantFromValue(inputdevices.at(i)));
+    }
+    else
+    {
+        QMessageBox::warning(this, "Error", "No input device found!");
+    }
+
+    if (!outputdevices.isEmpty())
+    {
+        for (int i = 0; i < outputdevices.size(); i++)
+            comboboxaudiooutput->addItem(outputdevices.at(i).deviceName(), qVariantFromValue(outputdevices.at(i)));
+    }
+    else
+    {
+        QMessageBox::warning(this, "Error", "No output device found!");
+    }
 }

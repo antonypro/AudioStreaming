@@ -27,7 +27,7 @@
  */
 
 // SFINAE requires variadic templates
-#ifndef __CUDACC__
+#ifndef EIGEN_CUDACC
 #if EIGEN_HAS_VARIADIC_TEMPLATES
   // SFINAE doesn't work for gcc <= 4.7
   #ifdef EIGEN_COMP_GNUC
@@ -50,5 +50,13 @@
 #define EIGEN_CONSTEXPR
 #endif
 
+
+#if EIGEN_OS_WIN || EIGEN_OS_WIN64
+#define EIGEN_SLEEP(n) Sleep(n)
+#elif EIGEN_OS_GNULINUX
+#define EIGEN_SLEEP(n) usleep(n * 1000);
+#else
+#define EIGEN_SLEEP(n) sleep(std::max<unsigned>(1, n/1000))
+#endif
 
 #endif

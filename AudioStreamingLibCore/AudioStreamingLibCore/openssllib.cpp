@@ -12,8 +12,7 @@ OpenSslLib::OpenSslLib(QObject *parent) : QObject(parent)
 
 OpenSslLib::~OpenSslLib()
 {
-    EncryptFinish();
-    DecryptFinish();
+
 }
 
 void OpenSslLib::loadFunctions()
@@ -36,10 +35,13 @@ void OpenSslLib::loadFunctions()
     if (!(pRAND_bytes = (tRAND_bytes)openssl.resolve("RAND_bytes")))
         return;
 
-    if (!(pRSA_new = (tRSA_new)openssl.resolve("RSA_new")))
+    if (!(pSHA256_Init = (tSHA256_Init)openssl.resolve("SHA256_Init")))
         return;
 
-    if (!(pRSA_free = (tRSA_free)openssl.resolve("RSA_free")))
+    if (!(pSHA256_Update = (tSHA256_Update)openssl.resolve("SHA256_Update")))
+        return;
+
+    if (!(pSHA256_Final = (tSHA256_Final)openssl.resolve("SHA256_Final")))
         return;
 
     if (!(pBN_new = (tBN_new)openssl.resolve("BN_new")))
@@ -51,15 +53,6 @@ void OpenSslLib::loadFunctions()
     if (!(pBN_set_word = (tBN_set_word)openssl.resolve("BN_set_word")))
         return;
 
-    if (!(pRSA_generate_key_ex = (tRSA_generate_key_ex)openssl.resolve("RSA_generate_key_ex")))
-        return;
-
-    if (!(pRSAPublicKey_dup = (tRSAPublicKey_dup)openssl.resolve("RSAPublicKey_dup")))
-        return;
-
-    if (!(pRSAPrivateKey_dup = (tRSAPrivateKey_dup)openssl.resolve("RSAPrivateKey_dup")))
-        return;
-
     if (!(pBIO_new = (tBIO_new)openssl.resolve("BIO_new")))
         return;
 
@@ -69,34 +62,7 @@ void OpenSslLib::loadFunctions()
     if (!(pBIO_free_all = (tBIO_free_all)openssl.resolve("BIO_free_all")))
         return;
 
-    if (!(pPEM_write_bio_RSAPublicKey = (tPEM_write_bio_RSAPublicKey)openssl.resolve("PEM_write_bio_RSAPublicKey")))
-        return;
-
     if (!(pBIO_read = (tBIO_read)openssl.resolve("BIO_read")))
-        return;
-
-    if (!(pPEM_write_bio_RSAPrivateKey = (tPEM_write_bio_RSAPrivateKey)openssl.resolve("PEM_write_bio_RSAPrivateKey")))
-        return;
-
-    if (!(pBIO_new_mem_buf = (tBIO_new_mem_buf)openssl.resolve("BIO_new_mem_buf")))
-        return;
-
-    if (!(pPEM_read_bio_RSAPublicKey = (tPEM_read_bio_RSAPublicKey)openssl.resolve("PEM_read_bio_RSAPublicKey")))
-        return;
-
-    if (!(pPEM_read_bio_RSAPrivateKey = (tPEM_read_bio_RSAPrivateKey)openssl.resolve("PEM_read_bio_RSAPrivateKey")))
-        return;
-
-    if (!(pRSA_public_encrypt = (tRSA_public_encrypt)openssl.resolve("RSA_public_encrypt")))
-        return;
-
-    if (!(pRSA_private_decrypt = (tRSA_private_decrypt)openssl.resolve("RSA_private_decrypt")))
-        return;
-
-    if (!(pRSA_private_encrypt = (tRSA_private_encrypt)openssl.resolve("RSA_private_encrypt")))
-        return;
-
-    if (!(pRSA_public_decrypt = (tRSA_public_decrypt)openssl.resolve("RSA_public_decrypt")))
         return;
 
     if (!(pEVP_BytesToKey = (tEVP_BytesToKey)openssl.resolve("EVP_BytesToKey")))
@@ -105,7 +71,7 @@ void OpenSslLib::loadFunctions()
     if (!(pEVP_aes_256_cbc = (tEVP_aes_256_cbc)openssl.resolve("EVP_aes_256_cbc")))
         return;
 
-    if (!(pEVP_whirlpool = (tEVP_whirlpool)openssl.resolve("EVP_whirlpool")))
+    if (!(pEVP_sha256 = (tEVP_sha256)openssl.resolve("EVP_sha256")))
         return;
 
     if (!(pEVP_CIPHER_CTX_init = (tEVP_CIPHER_CTX_init)openssl.resolve("EVP_CIPHER_CTX_init")))
@@ -131,15 +97,14 @@ void OpenSslLib::loadFunctions()
 
     if (!(pEVP_DecryptFinal_ex = (tEVP_DecryptFinal_ex)openssl.resolve("EVP_DecryptFinal_ex")))
         return;
-
-    if (!(pBIO_ctrl = (tBIO_ctrl)openssl.resolve("BIO_ctrl")))
-        return;
 #else
     pRAND_bytes = (tRAND_bytes)&RAND_bytes;
 
-    pRSA_new = (tRSA_new)&RSA_new;
+    pSHA256_Init = (tSHA256_Init)&SHA256_Init;
 
-    pRSA_free = (tRSA_free)&RSA_free;
+    pSHA256_Update = (tSHA256_Update)&SHA256_Update;
+
+    pSHA256_Final = (tSHA256_Final)&SHA256_Final;
 
     pBN_new = (tBN_new)&BN_new;
 
@@ -147,43 +112,19 @@ void OpenSslLib::loadFunctions()
 
     pBN_set_word = (tBN_set_word)&BN_set_word;
 
-    pRSA_generate_key_ex = (tRSA_generate_key_ex)&RSA_generate_key_ex;
-
-    pRSAPublicKey_dup = (tRSAPublicKey_dup)&RSAPublicKey_dup;
-
-    pRSAPrivateKey_dup = (tRSAPrivateKey_dup)&RSAPrivateKey_dup;
-
     pBIO_new = (tBIO_new)&BIO_new;
 
     pBIO_s_mem = (tBIO_s_mem)&BIO_s_mem;
 
     pBIO_free_all = (tBIO_free_all)&BIO_free_all;
 
-    pPEM_write_bio_RSAPublicKey = (tPEM_write_bio_RSAPublicKey)&PEM_write_bio_RSAPublicKey;
-
     pBIO_read = (tBIO_read)&BIO_read;
-
-    pPEM_write_bio_RSAPrivateKey = (tPEM_write_bio_RSAPrivateKey)&PEM_write_bio_RSAPrivateKey;
-
-    pBIO_new_mem_buf = (tBIO_new_mem_buf)&BIO_new_mem_buf;
-
-    pPEM_read_bio_RSAPublicKey = (tPEM_read_bio_RSAPublicKey)&PEM_read_bio_RSAPublicKey;
-
-    pPEM_read_bio_RSAPrivateKey = (tPEM_read_bio_RSAPrivateKey)&PEM_read_bio_RSAPrivateKey;
-
-    pRSA_public_encrypt = (tRSA_public_encrypt)&RSA_public_encrypt;
-
-    pRSA_private_decrypt = (tRSA_private_decrypt)&RSA_private_decrypt;
-
-    pRSA_private_encrypt = (tRSA_private_encrypt)&RSA_private_encrypt;
-
-    pRSA_public_decrypt = (tRSA_public_decrypt)&RSA_public_decrypt;
 
     pEVP_BytesToKey = (tEVP_BytesToKey)&EVP_BytesToKey;
 
     pEVP_aes_256_cbc = (tEVP_aes_256_cbc)&EVP_aes_256_cbc;
 
-    pEVP_whirlpool = (tEVP_whirlpool)&EVP_whirlpool;
+    pEVP_sha256 = (tEVP_sha256)&EVP_sha256;
 
     pEVP_CIPHER_CTX_init = (tEVP_CIPHER_CTX_init)&EVP_CIPHER_CTX_init;
 
@@ -200,8 +141,6 @@ void OpenSslLib::loadFunctions()
     pEVP_DecryptUpdate = (tEVP_DecryptUpdate)&EVP_DecryptUpdate;
 
     pEVP_DecryptFinal_ex = (tEVP_DecryptFinal_ex)&EVP_DecryptFinal_ex;
-
-    pBIO_ctrl = (tBIO_ctrl)&BIO_ctrl;
 #endif
     loaded = true;
 }
@@ -211,14 +150,14 @@ bool OpenSslLib::isLoaded()
     return loaded;
 }
 
-SecureByteArray OpenSslLib::RANDbytes(int size)
+QByteArray OpenSslLib::RANDbytes(int size)
 {
     OpenSslLib ssl;
 
     if (!ssl.loaded)
-        return SecureByteArray();
+        return QByteArray();
 
-    SecureByteArray output;
+    QByteArray output;
     output.resize(size);
 
     ssl.pRAND_bytes((uchar*)output.data(), size);
@@ -226,191 +165,41 @@ SecureByteArray OpenSslLib::RANDbytes(int size)
     return output;
 }
 
-bool OpenSslLib::generateKeys(SecureByteArray *private_key, SecureByteArray *public_key)
+QByteArray OpenSslLib::SHA256(const QByteArray &data, const QByteArray &salt)
 {
     OpenSslLib ssl;
 
-    if (!ssl.loaded)
-        return false;
+    SHA256_CTX ctx;
 
-    int rc;
+    unsigned char md[SHA256_DIGEST_LENGTH];
 
-    QScopedPointer<BIGNUM, BIGNUMDeleter> bn(ssl.pBN_new());
-    QScopedPointer<RSA, RSADeleter> rsa(ssl.pRSA_new());
+    ssl.pSHA256_Init(&ctx);
+    ssl.pSHA256_Update(&ctx, (unsigned char*)data.data(), data.size());
+    ssl.pSHA256_Update(&ctx, (unsigned char*)salt.data(), salt.size());
+    ssl.pSHA256_Final(md, &ctx);
 
-    rc = ssl.pBN_set_word(bn.data(), RSA_F4);
+    QByteArray hash = QByteArray((char*)md, sizeof(md));
 
-    if (!rc)
-        return false;
-
-    rc = ssl.pRSA_generate_key_ex(rsa.data(), 4096, bn.data(), NULL);
-
-    if (!rc)
-        return false;
-
-    QScopedPointer<RSA, RSADeleter> rsa_priv(ssl.pRSAPrivateKey_dup(rsa.data()));
-    QScopedPointer<RSA, RSADeleter> rsa_pub(ssl.pRSAPrivateKey_dup(ssl.pRSAPublicKey_dup(rsa.data())));
-
-    QScopedPointer<BIO, BIODeleter> bio_private(ssl.pBIO_new(ssl.pBIO_s_mem()));
-    QScopedPointer<BIO, BIODeleter> bio_public(ssl.pBIO_new(ssl.pBIO_s_mem()));
-
-    //Private key
-
-    ssl.pPEM_write_bio_RSAPrivateKey(bio_private.data(), rsa.data(), NULL, NULL, 0, NULL, NULL);
-
-    private_key->resize((int)ssl.pBIO_ctrl(bio_private.data(), BIO_CTRL_PENDING, 0, NULL));
-
-    ssl.pBIO_read(bio_private.data(), private_key->data(), private_key->size());
-
-    //Public key
-
-    ssl.pPEM_write_bio_RSAPublicKey(bio_public.data(), rsa.data());
-
-    public_key->resize((int)ssl.pBIO_ctrl(bio_public.data(), BIO_CTRL_PENDING, 0, NULL));
-
-    ssl.pBIO_read(bio_public.data(), public_key->data(), public_key->size());
-
-    return true;
+    return hash;
 }
 
-RSA *OpenSslLib::createRSA(const SecureByteArray &key, bool ispublic)
+void OpenSslLib::startEncrypt(const QByteArray &salt)
 {
-    OpenSslLib ssl;
-
-    if (!ssl.loaded)
-        return nullptr;
-
-    RSA *rsa = nullptr;
-    QScopedPointer<BIO, BIODeleter> keybio(ssl.pBIO_new_mem_buf((char*)key.constData(), key.size()));
-
-    if (!keybio.data())
-        return nullptr;
-
-    if (ispublic)
-        rsa = ssl.pPEM_read_bio_RSAPublicKey(keybio.data(), &rsa, NULL, NULL);
-    else
-        rsa = ssl.pPEM_read_bio_RSAPrivateKey(keybio.data(), &rsa, NULL, NULL);
-
-    return rsa;
-}
-
-SecureByteArray OpenSslLib::publicEncrypt(const SecureByteArray &public_key, const SecureByteArray &data)
-{
-    OpenSslLib ssl;
-
-    if (!ssl.loaded)
-        return SecureByteArray();
-
-    QScopedPointer<RSA, RSADeleter> rsa(createRSA(public_key, true));
-
-    if (!rsa.data())
-        return SecureByteArray();
-
-    SecureByteArray output;
-    output.resize(512);
-
-    int result = ssl.pRSA_public_encrypt(data.size(), (uchar*)data.data(), (uchar*)output.data(), rsa.data(), RSA_PKCS1_PADDING);
-
-    if (result >= 0)
-        output.resize(result);
-    else
-        output = SecureByteArray();
-
-    return output;
-}
-
-SecureByteArray OpenSslLib::privateDecrypt(const SecureByteArray &private_key, const SecureByteArray &encrypted)
-{
-    OpenSslLib ssl;
-
-    if (!ssl.loaded)
-        return SecureByteArray();
-
-    QScopedPointer<RSA, RSADeleter> rsa(createRSA(private_key, false));
-
-    if (!rsa.data())
-        return SecureByteArray();
-
-    SecureByteArray output;
-    output.resize(512);
-
-    int result = ssl.pRSA_private_decrypt(encrypted.size(), (uchar*)encrypted.data(), (uchar*)output.data(), rsa.data(), RSA_PKCS1_PADDING);
-
-    if (result >= 0)
-        output.resize(result);
-    else
-        output = SecureByteArray();
-
-    return output;
-}
-
-SecureByteArray OpenSslLib::privateEncrypt(const SecureByteArray &private_key, const SecureByteArray &data)
-{
-    OpenSslLib ssl;
-
-    if (!ssl.loaded)
-        return SecureByteArray();
-
-    QScopedPointer<RSA, RSADeleter> rsa(createRSA(private_key, false));
-
-    if (!rsa.data())
-        return SecureByteArray();
-
-    SecureByteArray output;
-    output.resize(512);
-
-    int result = ssl.pRSA_private_encrypt(data.size(), (uchar*)data.data(), (uchar*)output.data(), rsa.data(), RSA_PKCS1_PADDING);
-
-    if (result >= 0)
-        output.resize(result);
-    else
-        output = SecureByteArray();
-
-    return output;
-}
-
-SecureByteArray OpenSslLib::publicDecrypt(const SecureByteArray &public_key, const SecureByteArray &encrypted)
-{
-    OpenSslLib ssl;
-
-    if (!ssl.loaded)
-        return SecureByteArray();
-
-    QScopedPointer<RSA, RSADeleter> rsa(createRSA(public_key, true));
-
-    if (!rsa.data())
-        return SecureByteArray();
-
-    SecureByteArray output;
-    output.resize(512);
-
-    int result = ssl.pRSA_public_decrypt(encrypted.size(), (uchar*)encrypted.data(), (uchar*)output.data(), rsa.data(), RSA_PKCS1_PADDING);
-
-    if (result >= 0)
-        output.resize(result);
-    else
-        output = SecureByteArray();
-
-    return output;
-}
-
-void OpenSslLib::EncryptInit(const SecureByteArray &password, const SecureByteArray &salt)
-{
-    if (!loaded || enc_ctx)
+    if (enc_ctx)
         return;
 
     enc_ctx = new EVP_CIPHER_CTX;
 
-    uchar *key_data;
+    unsigned char *key_data;
     int key_data_len;
 
-    key_data = (uchar*)password.constData();
-    key_data_len = password.size();
+    key_data = (unsigned char*)m_password.data();
+    key_data_len = m_password.size();
 
-    int i, nrounds = qPow(10, 4);
-    uchar key[32], iv[32];
+    int i, nrounds = 1;
+    unsigned char key[EVP_MAX_KEY_LENGTH], iv[EVP_MAX_IV_LENGTH];
 
-    i = pEVP_BytesToKey(pEVP_aes_256_cbc(), pEVP_whirlpool(), (uchar*)salt.constData(), key_data, key_data_len, nrounds, key, iv);
+    i = pEVP_BytesToKey(pEVP_aes_256_cbc(), pEVP_sha256(), (unsigned char*)salt.data(), key_data, key_data_len, nrounds, key, iv);
 
     if (i != 32)
         return;
@@ -419,35 +208,35 @@ void OpenSslLib::EncryptInit(const SecureByteArray &password, const SecureByteAr
     pEVP_EncryptInit_ex(enc_ctx, pEVP_aes_256_cbc(), NULL, key, iv);
 }
 
-SecureByteArray OpenSslLib::Encrypt(const SecureByteArray &input)
+QByteArray OpenSslLib::encryptPrivate(const QByteArray &input)
 {
-    if (!loaded || !enc_ctx)
-        return SecureByteArray();
+    if (!enc_ctx)
+        return QByteArray();
 
-    SecureByteArray preencrypted;
-    preencrypted.append(getBytes(qChecksum(input.data(), input.size())));
-    preencrypted.append(RANDbytes(4));
+    QByteArray preencrypted;
     preencrypted.append(input);
 
     int len = preencrypted.size();
 
     int c_len = len + AES_BLOCK_SIZE, f_len = 0;
-    uchar *cipherdata = new uchar[c_len];
+    QByteArray cipherdata;
+    cipherdata.resize(c_len);
 
-    pEVP_EncryptInit_ex(enc_ctx, NULL, NULL, NULL, NULL);
-    pEVP_EncryptUpdate(enc_ctx, cipherdata, &c_len, (uchar*)preencrypted.constData(), len);
-    pEVP_EncryptFinal_ex(enc_ctx, cipherdata + c_len, &f_len);
+    if (pEVP_EncryptInit_ex(enc_ctx, NULL, NULL, NULL, NULL) != 1)
+        return QByteArray();
+    if (pEVP_EncryptUpdate(enc_ctx, (unsigned char*)cipherdata.data(), &c_len, (unsigned char*)preencrypted.data(), len) != 1)
+        return QByteArray();
+    if (pEVP_EncryptFinal_ex(enc_ctx, (unsigned char*)cipherdata.data() + c_len, &f_len) != 1)
+        return QByteArray();
 
-    SecureByteArray output = SecureByteArray((char*)cipherdata, c_len + f_len);
-
-    delete[] cipherdata;
+    QByteArray output = QByteArray((char*)cipherdata.data(), c_len + f_len);
 
     return output;
 }
 
-void OpenSslLib::EncryptFinish()
+void OpenSslLib::stopEncrypt()
 {
-    if (!loaded || !enc_ctx)
+    if (!enc_ctx)
         return;
 
     pEVP_CIPHER_CTX_cleanup(enc_ctx);
@@ -455,23 +244,23 @@ void OpenSslLib::EncryptFinish()
     enc_ctx = nullptr;
 }
 
-void OpenSslLib::DecryptInit(const SecureByteArray &password, const SecureByteArray &salt)
+void OpenSslLib::startDecrypt(const QByteArray &salt)
 {
-    if (!loaded || dec_ctx)
+    if (dec_ctx)
         return;
 
     dec_ctx = new EVP_CIPHER_CTX;
 
-    uchar *key_data;
+    unsigned char *key_data;
     int key_data_len;
 
-    key_data = (uchar*)password.constData();
-    key_data_len = password.size();
+    key_data = (unsigned char*)m_password.data();
+    key_data_len = m_password.size();
 
-    int i, nrounds = qPow(10, 4);
-    uchar key[32], iv[32];
+    int i, nrounds = 1;
+    unsigned char key[EVP_MAX_KEY_LENGTH], iv[EVP_MAX_IV_LENGTH];
 
-    i = pEVP_BytesToKey(pEVP_aes_256_cbc(), pEVP_whirlpool(), (uchar*)salt.constData(), key_data, key_data_len, nrounds, key, iv);
+    i = pEVP_BytesToKey(pEVP_aes_256_cbc(), pEVP_sha256(), (unsigned char*)salt.data(), key_data, key_data_len, nrounds, key, iv);
 
     if (i != 32)
         return;
@@ -480,45 +269,75 @@ void OpenSslLib::DecryptInit(const SecureByteArray &password, const SecureByteAr
     pEVP_DecryptInit_ex(dec_ctx, pEVP_aes_256_cbc(), NULL, key, iv);
 }
 
-SecureByteArray OpenSslLib::Decrypt(const SecureByteArray &input)
+QByteArray OpenSslLib::decryptPrivate(const QByteArray &input)
 {
-    if (!loaded || !dec_ctx)
-        return SecureByteArray();
+    if (!dec_ctx)
+        return QByteArray();
 
     int len = input.size();
 
     int p_len = len, f_len = 0;
-    uchar *plaindata = new uchar[p_len + AES_BLOCK_SIZE];
+    QByteArray plaindata;
+    plaindata.resize(p_len + AES_BLOCK_SIZE);
 
-    pEVP_DecryptInit_ex(dec_ctx, NULL, NULL, NULL, NULL);
-    pEVP_DecryptUpdate(dec_ctx, plaindata, &p_len, (uchar*)input.constData(), len);
-    pEVP_DecryptFinal_ex(dec_ctx, plaindata + p_len, &f_len);
+    if (pEVP_DecryptInit_ex(dec_ctx, NULL, NULL, NULL, NULL) != 1)
+        return QByteArray();
+    if (pEVP_DecryptUpdate(dec_ctx, (unsigned char*)plaindata.data(), &p_len, (unsigned char*)input.data(), len) != 1)
+        return QByteArray();
+    if (pEVP_DecryptFinal_ex(dec_ctx, (unsigned char*)plaindata.data() + p_len, &f_len) != 1)
+        return QByteArray();
 
-    SecureByteArray output = SecureByteArray((char*)plaindata, p_len + f_len);
-
-    delete[] plaindata;
-
-    if (output.size() < 6)
-        return SecureByteArray();
-
-    SecureByteArray crc16 = output.mid(0, 2);
-    output.remove(0, 6);
-
-    quint16 checksum = getValue<quint16>(crc16);
-    quint16 currentchecksum = qChecksum(output.data(), output.size());
-
-    if (checksum != currentchecksum)
-        output = SecureByteArray();
+    QByteArray output = QByteArray((char*)plaindata.data(), p_len + f_len);
 
     return output;
 }
 
-void OpenSslLib::DecryptFinish()
+void OpenSslLib::stopDecrypt()
 {
-    if (!loaded || !dec_ctx)
+    if (!dec_ctx)
         return;
 
     pEVP_CIPHER_CTX_cleanup(dec_ctx);
     delete dec_ctx;
     dec_ctx = nullptr;
+}
+
+QByteArray OpenSslLib::encrypt(QByteArray data)
+{
+    QByteArray salt;
+    QByteArray encrypted;
+    QByteArray encryptedheader;
+
+    salt = OpenSslLib::RANDbytes(8);
+
+    startEncrypt(salt);
+    encrypted = encryptPrivate(data);
+    stopEncrypt();
+
+    encryptedheader.append(QByteArray("Salted__", 8));
+    encryptedheader.append(salt);
+    encryptedheader.append(encrypted);
+
+    return encryptedheader;
+}
+
+QByteArray OpenSslLib::decrypt(QByteArray data)
+{
+    QByteArray decrypted;
+    QByteArray salt;
+
+    data.remove(0, 8); //Remove 'Salted__'
+    salt = data.mid(0, 8);
+    data.remove(0, 8);
+
+    startDecrypt(salt);
+    decrypted = decryptPrivate(data);
+    stopDecrypt();
+
+    return decrypted;
+}
+
+void OpenSslLib::setPassword(const QByteArray &password)
+{
+    m_password = password;
 }

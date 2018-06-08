@@ -12,7 +12,6 @@ public:
 
 public slots:
     void abort(qintptr descriptor);
-    void setKeys(const QByteArray &private_key, const QByteArray &public_key);
     void listen(quint16 port, bool auto_accept, int max_connections,
                 const QByteArray &negotiation_string,
                 const QString &id,

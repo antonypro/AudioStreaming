@@ -22,7 +22,6 @@ signals:
 
 public slots:
     virtual void abort(qintptr descriptor) = 0;
-    virtual void setKeys(const QByteArray &private_key, const QByteArray &public_key) = 0;
     virtual void listen(quint16 port, bool auto_accept, int max_connections,
                         const QByteArray &negotiation_string,
                         const QString &id,

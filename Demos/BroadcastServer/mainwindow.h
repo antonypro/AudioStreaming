@@ -34,6 +34,7 @@ private slots:
     void updateConnections();
     void error(const QString &error);
     void finished();
+    void currentIndexChanged(int index);
     void getDevInfo();
 
 private:
@@ -54,6 +55,8 @@ private:
     QLineEdit *lineport;
     QLineEdit *linemaxconnections;
     QPushButton *buttonstart;
+    QLineEdit *linesamplerate;
+    QLineEdit *linechannels;
     QLineEdit *lineid;
     QLineEdit *linepassword;
     QPlainTextEdit *texteditsettings;
@@ -66,6 +69,9 @@ private:
     QPushButton *buttonrecord;
     QPushButton *buttonrecordstop;
     QLCDNumber *lcdtime;
+    QCheckBox *boxautostart;
+
+    QPlainTextEdit *texteditlog;
 
     AudioRecorder *m_audio_recorder;
     QAudioFormat m_format;

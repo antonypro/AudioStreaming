@@ -8,9 +8,9 @@
 
 #define lowfrequency float(0)
 
-#define highfrequency float(1000)
+#define highfrequency float(20000)
 
-#define barscount 10
+#define barscount 50
 
 class BarsWidget : public QWidget
 {

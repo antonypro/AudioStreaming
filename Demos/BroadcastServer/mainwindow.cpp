@@ -2,6 +2,16 @@
 
 #define TITLE "Broadcast Server Demo"
 
+QPlainTextEdit *debug_edit = nullptr;
+
+void messageHandler(QtMsgType type, const QMessageLogContext &context, const QString &msg)
+{
+    Q_UNUSED(type)
+    Q_UNUSED(context)
+
+    QMetaObject::invokeMethod(debug_edit, "appendPlainText", Q_ARG(QString, msg));
+}
+
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 {
     qRegisterMetaType<QVector<SpectrumStruct> >("QVector<SpectrumStruct>");
@@ -28,6 +38,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 
     QScrollArea *areasettings = new QScrollArea(this);
 
+#if !defined(Q_OS_ANDROID) && !defined(Q_OS_IOS) && !defined(Q_OS_WINPHONE)
+    areasettings->setWidgetResizable(true);
+    areasettings->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+#endif
+
     QWidget *widgetsettings = new QWidget(this);
 
     QGridLayout *layout1 = new QGridLayout(widgetsettings);
@@ -39,6 +54,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     lineport = new QLineEdit(this);
 
     linemaxconnections = new QLineEdit(this);
+
+    linesamplerate = new QLineEdit(this);
+
+    linechannels = new QLineEdit(this);
 
     buttonstart = new QPushButton(this);
     buttonstart->setText("Start Server");
@@ -52,8 +71,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 
     texteditsettings = new QPlainTextEdit(this);
 
-    layout1->setMargin(0);
-    layout1->addWidget(comboboxaudioinput, 0, 0, 1, 3);
+    layout1->addWidget(new QLabel("Input device:", this), 0, 0);
+    layout1->addWidget(comboboxaudioinput, 0, 1, 1, 2);
     layout1->addWidget(new QLabel("Port:", this), 1, 0);
     layout1->addWidget(lineport, 1, 1);
     layout1->addWidget(buttonstart, 1, 2);
@@ -63,6 +82,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     layout1->addWidget(lineid, 3, 1, 1, 2);
     layout1->addWidget(new QLabel("Password:", this), 4, 0);
     layout1->addWidget(linepassword, 4, 1, 1, 2);
+    layout1->addWidget(new QLabel("Sample rate:", this), 5, 0);
+    layout1->addWidget(linesamplerate, 5, 1, 1, 2);
+    layout1->addWidget(new QLabel("Channels:", this), 6, 0);
+    layout1->addWidget(linechannels, 6, 1, 1, 2);
 
     areasettings->setWidget(widgetsettings);
 
@@ -86,6 +109,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     buttonrecord = new QPushButton(this);
     buttonrecordstop = new QPushButton(this);
     lcdtime = new QLCDNumber(this);
+    boxautostart = new QCheckBox("Auto start recording when server starts", this);
 
     QWidget *recorder = new QWidget(this);
 
@@ -96,17 +120,24 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     layout_record->addWidget(buttonrecord, 0, 3);
     layout_record->addWidget(buttonrecordstop, 0, 4);
     layout_record->addWidget(lcdtime, 1, 0, 1, 5);
+    layout_record->addWidget(boxautostart, 2, 0, 1, 5);
+
+    texteditlog = new QPlainTextEdit(this);
+    debug_edit = texteditlog;
 
     tabwidget->addTab(areasettings," Settings");
     tabwidget->addTab(analyzer, "Analyzer");
     tabwidget->addTab(listconnections, "Connections");
     tabwidget->addTab(recorder, "Record");
     tabwidget->addTab(texteditsettings, "Info");
+    tabwidget->addTab(texteditlog, "Log");
 
     layout->addWidget(tabwidget, 0, 0, 1, 1);
     layout->addWidget(level, 0, 1, 1, 1);
 
     texteditsettings->setReadOnly(true);
+
+    texteditlog->setReadOnly(true);
 
     connect(lineport, &QLineEdit::returnPressed, this, &MainWindow::start);
     connect(linemaxconnections, &QLineEdit::returnPressed, this, &MainWindow::start);
@@ -123,14 +154,18 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     lineport->setText("1024");
     linemaxconnections->setText("10");
 
+    widgetsettings->setFixedHeight(widgetsettings->sizeHint().height());
+
     setCentralWidget(widget);
 
     getDevInfo();
+
+    qInstallMessageHandler(messageHandler);
 }
 
 MainWindow::~MainWindow()
 {
-
+    qInstallMessageHandler(0);
 }
 
 void MainWindow::start()
@@ -177,26 +212,20 @@ void MainWindow::start()
 
     m_audio_lib = new AudioStreamingLibCore(this);
 
-    connect(m_audio_lib, &AudioStreamingLibCore::destroyed, [=]{m_audio_lib = nullptr;});
+    connect(m_audio_lib, &AudioStreamingLibCore::destroyed, [&]{m_audio_lib = nullptr;});
 
     StreamingInfo info;
 
     info.setWorkMode(StreamingInfo::StreamingWorkMode::BroadcastServer);
-    info.setSslEnabled(!password.isEmpty());
+    info.setEncryptionEnabled(!password.isEmpty());
     info.setGetAudioEnabled(true);
     info.setNegotiationString(QByteArray("BroadcastTCPDemo"));
     info.setID(lineid->text().trimmed());
 
-    QByteArray private_key;
-    QByteArray public_key;
-
-    if (info.isSslEnabled())
-        AudioStreamingLibCore::generateAsymmetricKeys(&private_key, &public_key);
-
-    QAudioDeviceInfo devinfo = comboboxaudioinput->currentData().value<QAudioDeviceInfo>();
+    QAudioDeviceInfo inputdevinfo = comboboxaudioinput->currentData().value<QAudioDeviceInfo>();
 
 #ifdef Q_OS_WIN
-    if (devinfo.isNull())
+    if (inputdevinfo.isNull())
     {
         QAudioFormat format;
 
@@ -228,13 +257,13 @@ void MainWindow::start()
     else
 #endif
     {
-        info.setInputDeviceInfo(devinfo);
+        info.setInputDeviceInfo(inputdevinfo);
 
         QAudioFormat format;
 
         format.setSampleSize(32);
-        format.setSampleRate(44100);
-        format.setChannelCount(2);
+        format.setSampleRate(linesamplerate->text().toInt());
+        format.setChannelCount(linechannels->text().toInt());
         format.setSampleType(QAudioFormat::Float);
         format.setByteOrder(QAudioFormat::LittleEndian);
 
@@ -245,6 +274,8 @@ void MainWindow::start()
     linemaxconnections->setEnabled(false);
     lineid->setEnabled(false);
     linepassword->setEnabled(false);
+    linesamplerate->setEnabled(false);
+    linechannels->setEnabled(false);
 
     comboboxaudioinput->setEnabled(false);
     buttonstart->setText("Stop Server");
@@ -260,9 +291,12 @@ void MainWindow::start()
 
     m_audio_lib->start(info);
 
-    m_audio_lib->setKeys(private_key, public_key);
-
     m_audio_lib->listen(port, true, password, max_connections);
+
+    boxautostart->setEnabled(false);
+
+    if (boxautostart->isChecked())
+        startPauseRecord(); //Auto start recording when server starts
 
     QString title = QString("%0 connection(s) - %1").arg(0).arg(TITLE);
 
@@ -339,7 +373,7 @@ void MainWindow::adjustSettings()
         connect(m_spectrum_analyzer, &SpectrumAnalyzer::destroyed, thread, &QThread::quit);
         connect(thread, &QThread::finished, thread, &QThread::deleteLater);
 
-        connect(m_spectrum_analyzer, &SpectrumAnalyzer::destroyed, [=]{m_spectrum_analyzer = nullptr;});
+        connect(m_spectrum_analyzer, &SpectrumAnalyzer::destroyed, [&]{m_spectrum_analyzer = nullptr;});
 
         QMetaObject::invokeMethod(m_spectrum_analyzer, "start", Qt::QueuedConnection, Q_ARG(QAudioFormat, format));
 
@@ -384,7 +418,7 @@ void MainWindow::startPauseRecord()
 
             m_audio_recorder = new AudioRecorder(linerecordpath->text(), m_format, m_audio_lib);
 
-            connect(m_audio_recorder, &AudioRecorder::destroyed, [=]{m_audio_recorder = nullptr;});
+            connect(m_audio_recorder, &AudioRecorder::destroyed, [&]{m_audio_recorder = nullptr;});
 
             if (!m_audio_recorder->open())
             {
@@ -425,8 +459,7 @@ void MainWindow::stopRecord()
 
     m_paused = true;
 
-    QTime time(0, 0, 0);
-    lcdtime->display(time.toString(Qt::ISODate));
+    lcdtime->display("--:--");
 
     m_format = QAudioFormat();
 }
@@ -440,8 +473,7 @@ void MainWindow::resetRecordPage()
     buttonrecord->setEnabled(false);
     buttonrecordstop->setEnabled(false);
 
-    QTime time(0, 0, 0);
-    lcdtime->display(time.toString(Qt::ISODate));
+    lcdtime->display("--:--");
 }
 
 void MainWindow::writeToFile(const QByteArray &data)
@@ -480,12 +512,17 @@ void MainWindow::finished()
     if (!isVisible())
         return;
 
+    stopRecord();
     resetRecordPage();
+
+    boxautostart->setEnabled(true);
 
     lineport->setEnabled(true);
     linemaxconnections->setEnabled(true);
     lineid->setEnabled(true);
     linepassword->setEnabled(true);
+
+    currentIndexChanged(comboboxaudioinput->currentIndex());
 
     comboboxaudioinput->setEnabled(true);
     buttonstart->setText("Start Server");
@@ -505,16 +542,44 @@ void MainWindow::finished()
 #endif
 }
 
+void MainWindow::currentIndexChanged(int index)
+{
+    bool disable = (QSysInfo::windowsVersion() >= QSysInfo::WV_VISTA && index == 0);
+
+    if (disable)
+    {
+        linesamplerate->setEnabled(false);
+        linechannels->setEnabled(false);
+
+        linesamplerate->clear();
+        linechannels->clear();
+    }
+    else
+    {
+        linesamplerate->setEnabled(true);
+        linechannels->setEnabled(true);
+
+        linesamplerate->setText("44100");
+        linechannels->setText("2");
+    }
+}
+
 void MainWindow::getDevInfo()
 {
     if (QSysInfo::windowsVersion() >= QSysInfo::WV_VISTA)
         comboboxaudioinput->addItem("Loopback (What you hear)");
 
-    QList<QAudioDeviceInfo> devices = QAudioDeviceInfo::availableDevices(QAudio::AudioInput);
+    QList<QAudioDeviceInfo> inputdevices = QAudioDeviceInfo::availableDevices(QAudio::AudioInput);
 
-    for (int i = 0; i < devices.size(); i++)
-        comboboxaudioinput->addItem(devices.at(i).deviceName(), qVariantFromValue(devices.at(i)));
+    for (int i = 0; i < inputdevices.size(); i++)
+        comboboxaudioinput->addItem(inputdevices.at(i).deviceName(), qVariantFromValue(inputdevices.at(i)));
 
     if (comboboxaudioinput->count() == 0)
         QMessageBox::warning(this, "Error", "No input device found!");
+
+    currentIndexChanged(comboboxaudioinput->currentIndex());
+
+    connect(comboboxaudioinput,
+            static_cast<void(QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+            this, &MainWindow::currentIndexChanged);
 }

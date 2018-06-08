@@ -39,12 +39,15 @@ private slots:
     void connected(const QHostAddress &address, const QString &id);
     void disconnected(const QHostAddress &address);
     void finished();
+    void getDevInfo();
 
 private:
     AudioStreamingLibCore *m_audio_lib;
     AudioStreamingLibCore *m_discover_instance;
 
     SpectrumAnalyzer *m_spectrum_analyzer;
+
+    QComboBox *comboboxaudiooutput;
 
     QLineEdit *linehost;
     QLineEdit *lineport;
@@ -65,6 +68,9 @@ private:
     QPushButton *buttonrecord;
     QPushButton *buttonrecordstop;
     QLCDNumber *lcdtime;
+    QCheckBox *boxautostart;
+
+    QPlainTextEdit *texteditlog;
 
     AudioRecorder *m_audio_recorder;
     QAudioFormat m_format;

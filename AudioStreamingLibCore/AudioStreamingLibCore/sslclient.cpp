@@ -1,72 +1,48 @@
 #include "sslclient.h"
 
-SslClient::SslClient(QObject *parent) : AbstractClient(parent)
+SslClient::SslClient(QObject *parent) : QObject(parent)
 {
-    m_socket = nullptr;
     m_size = 0;
-    m_global_ssl = nullptr;
+    m_socket = nullptr;
 
     m_timer = new QTimer(this);
     connect(m_timer, &QTimer::timeout, this, &SslClient::timeout);
     m_timer->setSingleShot(true);
-
-    ssl = new OpenSslLib(this);
 }
 
 SslClient::~SslClient()
 {
-    disconnectedPrivate();
+    stop();
 }
 
-void SslClient::abort()
+void SslClient::connectToHost(const QString &host, quint16 port)
 {
-    if (m_socket)
-        m_socket->abort();
-}
-
-bool SslClient::testSsl()
-{
-    if (!ssl->isLoaded())
-        emit error("OpenSsl not loaded!");
-
-    return ssl->isLoaded();
-}
-
-void SslClient::connectToHost(const QString &host, quint16 port,
-                              const QByteArray &negotiation_string,
-                              const QString &id,
-                              const QByteArray &password)
-{
-    if (!testSsl())
-        return;
-
     if (m_socket)
         return;
 
-    m_negotiation_string = negotiation_string.leftJustified(128, (char)0, true);
-    m_id = id;
+    m_socket = new QSslSocket(this);
+    SETTONULLPTR(m_socket);
 
-    m_socket = new QTcpSocket(this);
-
-    setTonullptr(m_socket);
-
-    connect(m_socket, &QTcpSocket::disconnected, this, &SslClient::disconnectedPrivate);
-    connect(m_socket, static_cast<void(QTcpSocket::*)(QTcpSocket::SocketError)>(&QTcpSocket::error), this, &SslClient::errorPrivate);
-
-    connect(m_socket, &QTcpSocket::readyRead, this, &SslClient::readyBeginEncryption);
+    connect(m_socket, &QSslSocket::encrypted, this, &SslClient::encrypted);
+    connect(m_socket, &QSslSocket::disconnected, this, &SslClient::disconnectedPrivate);
+    connect(m_socket, static_cast<void(QSslSocket::*)(const QList<QSslError>&)>(&QSslSocket::sslErrors), this, &SslClient::sslErrors);
+    connect(m_socket, static_cast<void(QSslSocket::*)(QSslSocket::SocketError)>(&QSslSocket::error), this, &SslClient::errorPrivate);
 
     m_timer->start(10 * 1000);
 
-    m_socket->connectToHost(host, port);
+    m_socket->setProtocol(QSsl::TlsV1_2OrLater);
 
-    m_global_ssl = new OpenSslLib(this);
+    m_socket->connectToHostEncrypted(host, port);
+}
 
-    setTonullptr(m_global_ssl);
+void SslClient::sslErrors(QList<QSslError> errors)
+{
+    Q_UNUSED(errors)
 
-    m_global_ssl->EncryptInit(password, QByteArray());
-    m_global_ssl->DecryptInit(password, QByteArray());
+    if (!m_socket)
+        return;
 
-    emit m_socket->readyRead();
+    m_socket->ignoreSslErrors();
 }
 
 void SslClient::timeout()
@@ -75,69 +51,27 @@ void SslClient::timeout()
     stop();
 }
 
-void SslClient::readyBeginEncryption()
+void SslClient::encrypted()
 {
-    if (m_socket->bytesAvailable() < MAX_ID_LENGTH + 1024 + AES_BLOCK_SIZE)
-        return;
-
-    m_remote_id = QLatin1String(m_socket->read(MAX_ID_LENGTH));
-
-    QByteArray incomming_data = m_socket->readAll();
-
-    if (incomming_data.size() > 1024 + AES_BLOCK_SIZE)
-    {
-        emit error("Ssl handshake failed!");
-        return;
-    }
-
-    QByteArray public_key = m_global_ssl->Decrypt(incomming_data);
-
-    if (public_key.size() != 1024)
-    {
-        emit error("Password incorrect!");
-        return;
-    }
-
-    m_rnd = OpenSslLib::RANDbytes(256);
-
-    QByteArray data;
-    data.append(m_global_ssl->Encrypt(OpenSslLib::RANDbytes(128)));
-    data.append(m_rnd);
-
-    QByteArray public_encrypted = OpenSslLib::publicEncrypt(public_key, data);
-
-    m_socket->write(m_id.toLatin1());
-    m_socket->write(public_encrypted);
-
-    QByteArray pswd = m_rnd.mid(0, 128);
-    QByteArray salt = m_rnd.mid(128, 128);
-
-    ssl->EncryptInit(pswd, salt);
-    ssl->DecryptInit(pswd, salt);
-
-    disconnect(m_socket, &QTcpSocket::readyRead, this, &SslClient::readyBeginEncryption);
-
-    connect(m_socket, &QTcpSocket::readyRead, this, &SslClient::readyReadPrivate);
-
-    m_socket->write(ssl->Encrypt(m_negotiation_string));
-
-    connectedPrivate();
-
-    emit m_socket->readyRead();
-
     m_timer->stop();
-}
 
-void SslClient::connectedPrivate()
-{
-    QHostAddress host = m_socket->peerAddress();
-    qintptr descriptor = m_socket->socketDescriptor();
+    connect(m_socket, &QSslSocket::readyRead, this, &SslClient::readyReadPrivate);
 
-    PeerData pd;
-    pd.host = host;
-    pd.descriptor = descriptor;
+    QSslCertificate certificate = m_socket->peerCertificate();
 
-    emit connected(pd, m_remote_id);
+    QByteArray hash = certificate.digest(QCryptographicHash::Sha256).toHex().toUpper();
+
+    QByteArray formatted_hash;
+
+    for (int i = hash.size() - 2; i >= 0; i -= 2)
+    {
+        formatted_hash.prepend(hash.mid(i, 2));
+        formatted_hash.prepend(":");
+    }
+
+    formatted_hash.remove(0, 1);
+
+    emit connectedToServer(formatted_hash);
 }
 
 void SslClient::disconnectedPrivate()
@@ -145,46 +79,38 @@ void SslClient::disconnectedPrivate()
     if (!m_socket)
         return;
 
-    QHostAddress host = m_socket->peerAddress();
-    qintptr descriptor = m_socket->socketDescriptor();
-
     stop();
 
-    PeerData pd;
-    pd.host = host;
-    pd.descriptor = descriptor;
-
-    emit disconnected(pd);
+    emit disconnected();
 }
 
 void SslClient::errorPrivate(QAbstractSocket::SocketError e)
 {
-    if (e != QAbstractSocket::RemoteHostClosedError)
-    {
-        QString err = m_socket->errorString();
-        emit error(err);
-    }
-    else
-    {
-        emit error(QString());
-    }
+    Q_UNUSED(e)
+
+    QString err = m_socket->errorString();
+
+    emit error(err);
+
+    disconnectedPrivate();
+
+    stop();
 }
 
 void SslClient::stop()
 {
     m_timer->stop();
 
+    if (!m_socket)
+        return;
+
+    m_socket->blockSignals(true);
+
+    m_socket->abort();
+    m_socket->deleteLater();
+
     m_size = 0;
     m_buffer.clear();
-
-    if (m_global_ssl)
-        m_global_ssl->deleteLater();
-
-    if (m_socket)
-    {
-        m_socket->abort();
-        m_socket->deleteLater();
-    }
 }
 
 int SslClient::write(const QByteArray &data)
@@ -192,10 +118,8 @@ int SslClient::write(const QByteArray &data)
     if (!m_socket)
         return 0;
 
-    QByteArray encrypted = ssl->Encrypt(data);
-
-    m_socket->write(ssl->Encrypt(getBytes<qint32>(encrypted.size())));
-    m_socket->write(encrypted);
+    m_socket->write(getBytes<qint32>(data.size()));
+    m_socket->write(data);
 
     return 1;
 }
@@ -206,36 +130,84 @@ void SslClient::readyReadPrivate()
     {
         m_buffer.append(m_socket->readAll());
 
-        while ((m_size == 0 && m_buffer.size() >= AES_BLOCK_SIZE) || (m_size > 0 && m_buffer.size() >= m_size))
+        while ((m_size == 0 && m_buffer.size() >= 4) || (m_size > 0 && m_buffer.size() >= m_size))
         {
-            if (m_size == 0 && m_buffer.size() >= AES_BLOCK_SIZE)
+            if (m_size == 0 && m_buffer.size() >= 4)
             {
-                m_size = getValue<qint32>(ssl->Decrypt(m_buffer.mid(0, AES_BLOCK_SIZE)));
-                m_buffer.remove(0, AES_BLOCK_SIZE);
-
-                if (m_size < 0 || m_size > MAX_NETWORK_CHUNK_SIZE)
-                {
-                    m_socket->abort();
-                    return;
-                }
+                m_size = getValue<qint32>(m_buffer.mid(0, 4));
+                m_buffer.remove(0, 4);
             }
             if (m_size > 0 && m_buffer.size() >= m_size)
             {
-                QByteArray encrypteddata = m_buffer.mid(0, m_size);
+                QByteArray data = m_buffer.mid(0, m_size);
                 m_buffer.remove(0, m_size);
                 m_size = 0;
-
-                QByteArray decrypteddata = ssl->Decrypt(encrypteddata);
-                QHostAddress host = m_socket->peerAddress();
-                qintptr descriptor = m_socket->socketDescriptor();
-
-                PeerData pd;
-                pd.data = decrypteddata;
-                pd.host = host;
-                pd.descriptor = descriptor;
-
-                emit readyRead(pd);
+                processInput(data);
             }
         }
+    }
+}
+
+void SslClient::processInput(const QByteArray &peer_data)
+{
+    QByteArray data = peer_data;
+
+    quint8 command = getValue<quint8>(data.mid(0, 1));
+    data.remove(0, 1);
+
+    switch (command)
+    {
+    case ServerCommand::ConnectionRequested:
+    {
+        if (data.size() != 4 + 20)
+        {
+            m_socket->abort();
+            return;
+        }
+
+        quint32 host = getValue<quint32>(data.mid(0, 4));
+        data.remove(0, 4);
+
+        emit pending(host, data);
+
+        break;
+    }
+    case ServerCommand::ConnectionInfo:
+    {
+        if (data.size() != 4 + 20 + 32)
+        {
+            m_socket->abort();
+            return;
+        }
+
+        quint32 ip = getValue<quint32>(data.mid(0, 4));
+        data.remove(0, 4);
+
+        QByteArray id = data.mid(0, 20);
+        data.remove(0, 20);
+
+        QByteArray password = data.mid(0, 32);
+        data.remove(0, 32);
+
+        emit connectionInfo(ip, id, password);
+
+        break;
+    }
+    case ServerCommand::Port:
+    {
+        if (data.size() != 2)
+        {
+            m_socket->abort();
+            return;
+        }
+
+        quint16 port = getValue<quint16>(data);
+
+        emit remotePort(port);
+
+        break;
+    }
+    default:
+        break;
     }
 }

@@ -1,7 +1,5 @@
 QT +=       core gui widgets multimedia concurrent
 
-android:QT += androidextras
-
 TARGET =    BroadcastServer
 TEMPLATE =  app
 
@@ -25,13 +23,6 @@ win32 {
 SOURCES += qwinloopback.cpp
 HEADERS += qwinloopback.h
 LIBS += -lOle32 -lwinmm -lksuser -luuid
-}
-
-android {
-SOURCES += \
-        keepandroidawake.cpp
-HEADERS += \
-        keepandroidawake.h
 }
 
 INCLUDEPATH += $$PWD/3rdparty/kiss_fft130

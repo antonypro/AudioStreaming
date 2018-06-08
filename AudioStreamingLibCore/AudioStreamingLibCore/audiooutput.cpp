@@ -25,10 +25,14 @@ void AudioOutput::startPrivate(const QAudioDeviceInfo &devinfo,
 {
     m_format = m_supported_format = format;
 
+    //Adjust to integer
+    m_supported_format.setSampleSize(16);
+    m_supported_format.setSampleType(QAudioFormat::SignedInt);
+
     //Check if format is supported by the choosen output device
-    if (!devinfo.isFormatSupported(m_format))
+    if (!devinfo.isFormatSupported(m_supported_format))
     {
-        m_supported_format = devinfo.nearestFormat(m_format);
+        m_supported_format = devinfo.nearestFormat(m_supported_format);
 
         bool found_format = true;
 
@@ -46,15 +50,17 @@ void AudioOutput::startPrivate(const QAudioDeviceInfo &devinfo,
         }
     }
 
+    LIB_DEBUG_LEVEL_1("Output format used by device:" << m_supported_format);
+
     int internal_buffer_size;
 
     //Adjust internal buffer size
     if (format.sampleRate() >= 44100)
-        internal_buffer_size = (1024 * 10) * m_format.channelCount();
+        internal_buffer_size = (1024 * 10) * m_supported_format.channelCount();
     else if (format.sampleRate() >= 24000)
-        internal_buffer_size = (1024 * 6) * m_format.channelCount();
+        internal_buffer_size = (1024 * 6) * m_supported_format.channelCount();
     else
-        internal_buffer_size = (1024 * 4) * m_format.channelCount();
+        internal_buffer_size = (1024 * 4) * m_supported_format.channelCount();
 
     //Initialize the audio output device
     m_audio_output = new QAudioOutput(devinfo, m_supported_format, this);
@@ -107,7 +113,6 @@ void AudioOutput::start(const QAudioDeviceInfo &devinfo,
                         int time_to_buffer,
                         bool is_very_output_enabled)
 {
-
     QMetaObject::invokeMethod(this, "startPrivate", Qt::QueuedConnection,
                               Q_ARG(QAudioDeviceInfo, devinfo),
                               Q_ARG(QAudioFormat, format),
@@ -117,7 +122,12 @@ void AudioOutput::start(const QAudioDeviceInfo &devinfo,
 
 void AudioOutput::setVolumePrivate(int volume)
 {
-    m_volume = volume;
+    float volumeLevelLinear = (float)0.5; //cut amplitude in half
+    float volumeLevelDb = 10 * (qLn(volumeLevelLinear) / qLn(10));
+    float volumeLinear = (volume / (float)100);
+    m_volume = volumeLinear * qPow(10, (volumeLevelDb / (float)20));
+
+    LIB_DEBUG_LEVEL_1("Volume:" << m_volume);
 }
 
 void AudioOutput::setVolume(int volume)
@@ -134,6 +144,22 @@ void AudioOutput::verifyBuffer()
 void AudioOutput::writePrivate(const QByteArray &data)
 {
     m_buffer.append(data);
+
+#ifdef IS_TO_DEBUG
+    if (m_buffer_requested)
+    {
+        if (m_time_to_buffer > 0)
+        {
+            LIB_DEBUG_LEVEL_1("Buffering:"
+                      << qPrintable(QString("%0\\%1 ms - %2%").arg(sizeToTime(m_buffer.size(), m_format)).arg(m_time_to_buffer)
+                                    .arg(m_buffer.size() * 100 / m_size_to_buffer)));
+        }
+        else
+        {
+            LIB_DEBUG_LEVEL_1("Not buffered data got:" << sizeToTime(m_buffer.size(), m_format) << "ms");
+        }
+    }
+#endif
 
     preplay();
 }
@@ -179,6 +205,11 @@ void AudioOutput::play()
     }
     else
     {
+        if (m_buffer_requested)
+        {
+            LIB_DEBUG_LEVEL_1("Playing...");
+        }
+
         //Buffer is ready and data can be played
         m_buffer_requested = false;
     }
@@ -187,11 +218,15 @@ void AudioOutput::play()
 
     int chunks = m_audio_output->bytesFree() / readlen;
 
+    int aligned_len = qRound(readlen / m_sample_align);
+
+    LIB_DEBUG_LEVEL_2("Chunks:" << chunks);
+
     //Play data while it's available in the output device
     while (chunks)
     {
         //Get chunk from the buffer
-        QByteArray samples = m_buffer.mid(0, timeToSize(sizeToTime(qRound(readlen * m_sample_align), m_supported_format), m_format));
+        QByteArray samples = m_buffer.mid(0, aligned_len);
         int len = samples.size();
         m_buffer.remove(0, len);
 
@@ -204,7 +239,7 @@ void AudioOutput::play()
         if (!samples.isEmpty())
         {
             Eigen::Ref<Eigen::VectorXf> samplesX = Eigen::Map<Eigen::VectorXf>((float*)samples.data(), samples.size() / sizeof(float));
-            samplesX *= (m_volume / (float)100);
+            samplesX *= m_volume;
         }
 
         if (!samples.isEmpty() && m_format != m_supported_format)
@@ -215,7 +250,10 @@ void AudioOutput::play()
 
         //Write data to the output device after the volume was applied
         if (len)
+        {
+            LIB_DEBUG_LEVEL_2("Writing" << sizeToTime(samples.size(), m_supported_format) << "ms to output device.");
             m_device->write(samples);
+        }
 
         //If chunk is smaller than the output chunk size, exit loop
         if (len != readlen)

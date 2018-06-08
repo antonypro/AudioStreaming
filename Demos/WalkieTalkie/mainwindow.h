@@ -8,10 +8,58 @@
 #include "levelwidget.h"
 #include "audiorecorder.h"
 
+static inline QString cleanString(const QString &s)
+{
+    QString diacriticLetters;
+    QStringList noDiacriticLetters;
+    QStringList acceptedCharacters;
+
+    diacriticLetters = QString::fromUtf8("ŠŒŽšœžŸ¥µÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖØÙÚÛÜÝßàáâãäåæçèéêëìíîïðñòóôõöøùúûüýÿ");
+    noDiacriticLetters << "S"<<"OE"<<"Z"<<"s"<<"oe"<<"z"<<"Y"<<"Y"<<"u"<<"A"<<"A"<<"A"<<"A"<<"A"<<"A"<<"AE"<<"C"
+                        <<"E"<<"E"<<"E"<<"E"<<"I"<<"I"<<"I"<<"I"<<"D"<<"N"<<"O"<<"O"<<"O"<<"O"<<"O"<<"O"<<"U"<<"U"
+                       <<"U"<<"U"<<"Y"<<"s"<<"a"<<"a"<<"a"<<"a"<<"a"<<"a"<<"ae"<<"c"<<"e"<<"e"<<"e"<<"e"<<"i"<<"i"
+                      <<"i"<<"i"<<"o"<<"n"<<"o"<<"o"<<"o"<<"o"<<"o"<<"o"<<"u"<<"u"<<"u"<<"u"<<"y"<<"y";
+
+    acceptedCharacters << "0" << "1" << "2" << "3" << "4" << "5" << "6" << "7" << "8" << "9"
+                       << "a" << "b" << "c" << "d" << "e" << "f" << "g" << "h" << "i" << "j"
+                       << "k" << "l" << "m" << "n" << "o" << "p" << "q" << "r" << "s" << "t"
+                       << "u" << "v" << "w" << "x" << "y" << "z";
+
+    QString output_tmp;
+
+    for (int i = 0; i < s.length(); i++)
+    {
+        QChar c = s[i];
+        int dIndex = diacriticLetters.indexOf(c);
+        if (dIndex < 0)
+        {
+            output_tmp.append(c);
+        }
+        else
+        {
+            QString replacement = noDiacriticLetters[dIndex];
+            output_tmp.append(replacement);
+        }
+    }
+
+    output_tmp = output_tmp.toLower();
+
+    QString output;
+
+    for (int i = 0; i < output_tmp.length(); i++)
+    {
+        QChar c = output_tmp[i];
+
+        if (acceptedCharacters.contains(c))
+            output.append(c);
+    }
+
+    return output;
+}
+
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
-
 public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
@@ -25,10 +73,11 @@ private slots:
     void stopDiscover();
     void peerFound(const QHostAddress &address, const QString &id);
     void selectPeer(QListWidgetItem *item);
+    void webClient();
     void client();
     void server();
     void sliderVolumeValueChanged(int value);
-    void getDevInfo();
+    void webClientStarted(bool enable);
     void clientStarted(bool enable);
     void serverStarted(bool enable);
     void error(const QString &error);
@@ -40,14 +89,19 @@ private slots:
     void writeLocalToBuffer(const QByteArray &data);
     void writePeerToBuffer(const QByteArray &data);
     void mixLocalPeer();
+    void connectedToServer(const QByteArray &hash);
+    void connectToPeer();
+    void webClientConnected(const QHostAddress &address, const QString &id);
     void clientConnected(const QHostAddress &address, const QString &id);
     void serverConnected(const QHostAddress &address, const QString &id);
+    void webClientDisconnected();
     void clientDisconnected();
     void serverDisconnected();
     void pending(const QHostAddress &address, const QString &id);
     void writeText();
     void receiveText(const QByteArray &data);
     void finished();
+    void getDevInfo();
 
 private:
     QString m_peer;
@@ -63,6 +117,20 @@ private:
     QTabWidget *tabwidget;
 
     QComboBox *comboboxaudioinput;
+    QComboBox *comboboxaudiooutput;
+
+    QPushButton *buttonconnecttopeer;
+    QLabel *labelservertweb;
+    QLineEdit *lineserverweb;
+    QLabel *labelportweb;
+    QLineEdit *lineportweb;
+    QLabel *labelsamplerateweb;
+    QLineEdit *linesamplerateweb;
+    QLabel *labelchannelsweb;
+    QLineEdit *linechannelsweb;
+    QLabel *labelbuffertimeweb;
+    QLineEdit *linebuffertimeweb;
+
     QLabel *labelhost;
     QLineEdit *linehost;
     QLabel *labelport;
@@ -85,23 +153,29 @@ private:
     QLineEdit *linechat;
     QPushButton *buttonsendchat;
 
+    QLabel *labelwebid;
     QLabel *labelclientid;
     QLabel *labelserverid;
 
+    QLabel *labelwebpassword;
     QLabel *labelclientpassword;
     QLabel *labelserverpassword;
 
+    QLineEdit *linewebid;
     QLineEdit *lineclientid;
     QLineEdit *lineserverid;
 
+    QLineEdit *linewebpassword;
     QLineEdit *lineclientpassword;
     QLineEdit *lineserverpassword;
 
+    QPushButton *buttonstartweb;
     QPushButton *buttonconnect;
     QPushButton *buttonstartserver;
 
     QWidget *widget1;
     QWidget *widget2;
+    QWidget *widget3;
 
     QScrollArea *scrollclientserver;
     QWidget *widgetchat;
@@ -111,6 +185,9 @@ private:
     QPushButton *buttonrecord;
     QPushButton *buttonrecordstop;
     QLCDNumber *lcdtime;
+    QCheckBox *boxautostart;
+
+    QPlainTextEdit *texteditlog;
 
     AudioRecorder *m_audio_recorder;
     QAudioFormat m_format;

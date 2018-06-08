@@ -1,5 +1,10 @@
 #include "worker.h"
 
+#if defined (IS_TO_DEBUG_VERBOSE_1) || defined (IS_TO_DEBUG_VERBOSE_2)
+QMutex record_mutex;
+qint64 record_count = 0;
+#endif
+
 #define INVALID_FORMAT\
     (m_streaming_info.inputAudioFormat().isValid() &&\
     (m_streaming_info.inputAudioFormat().sampleType() != QAudioFormat::Float ||\
@@ -75,8 +80,8 @@ void Worker::start(const StreamingInfo &streaming_info)
         }
         connect(m_opus_dec, &OpusDecoderClass::error, this, &Worker::errorPrivate);
 #endif
-        if (m_streaming_info.isSslEnabled())
-            m_client = new SslClient(this);
+        if (m_streaming_info.isEncryptionEnabled())
+            m_client = new EncryptedClient(this);
         else
             m_client = new Client(this);
 
@@ -132,8 +137,8 @@ void Worker::start(const StreamingInfo &streaming_info)
 #endif
         m_server_discover = new DiscoverServer(this);
 
-        if (m_streaming_info.isSslEnabled())
-            m_server = new SslServer(this);
+        if (m_streaming_info.isEncryptionEnabled())
+            m_server = new EncryptedServer(this);
         else
             m_server = new Server(this);
 
@@ -295,8 +300,8 @@ void Worker::start(const StreamingInfo &streaming_info)
 
         if (m_streaming_info.workMode() == StreamingInfo::StreamingWorkMode::WalkieTalkieClient)
         {
-            if (m_streaming_info.isSslEnabled())
-                m_client = new SslClient(this);
+            if (m_streaming_info.isEncryptionEnabled())
+                m_client = new EncryptedClient(this);
             else
                 m_client = new Client(this);
 
@@ -309,8 +314,8 @@ void Worker::start(const StreamingInfo &streaming_info)
         {
             m_server_discover = new DiscoverServer(this);
 
-            if (m_streaming_info.isSslEnabled())
-                m_server = new SslServer(this);
+            if (m_streaming_info.isEncryptionEnabled())
+                m_server = new EncryptedServer(this);
             else
                 m_server = new Server(this);
 
@@ -323,21 +328,125 @@ void Worker::start(const StreamingInfo &streaming_info)
 
         break;
     }
-    default:
+    case StreamingInfo::StreamingWorkMode::WebClient:
+    {
+        m_callback_enabled = m_streaming_info.isCallBackEnabled();
+
+        m_is_walkie_talkie = true;
+#ifdef OPUS
+        m_resampler = new r8brain();
+        m_opus_enc = new OpusEncoderClass();
+        m_opus_dec = new OpusDecoderClass();
+        connect(m_opus_enc, &OpusEncoderClass::error, this, &Worker::errorPrivate);
+        connect(m_opus_dec, &OpusDecoderClass::error, this, &Worker::errorPrivate);
+        {
+            connect(this, &Worker::destroyed, m_resampler, &r8brain::deleteLater);
+
+            connect(m_resampler, &r8brain::error, this, &Worker::errorPrivate);
+            connect(m_resampler, &r8brain::resampled, m_opus_enc, &OpusEncoderClass::write);
+
+            if (m_streaming_info.isGetAudioEnabled())
+                connect(m_resampler, &r8brain::resampled, this, &Worker::veryInputData);
+        }
+        {
+            connect(this, &Worker::destroyed, m_opus_enc, &OpusEncoderClass::deleteLater);
+
+            connect(m_opus_enc, &OpusEncoderClass::encoded, this, &Worker::posProcessedInput);
+        }
+        {
+            connect(this, &Worker::destroyed, m_opus_dec, &OpusDecoderClass::deleteLater);
+
+            connect(m_opus_dec, &OpusDecoderClass::decoded, this, &Worker::posProcessedOutput);
+        }
+#endif
+        if (m_streaming_info.inputDeviceType() == StreamingInfo::AudioDeviceType::LibraryAudioDevice)
+        {
+            m_audio_input = new AudioInput();
+
+            connect(this, &Worker::destroyed, m_audio_input, &AudioInput::deleteLater);
+
+            connect(m_audio_input, &AudioInput::error, this, &Worker::errorPrivate);
+
+            if (m_callback_enabled)
+                connect(m_audio_input, &AudioInput::readyRead, this, &Worker::inputData);
+            else
+                connect(m_audio_input, &AudioInput::readyRead, this, &Worker::inputDataBack);
+
+            adjustSettingsPrivate(true, true, false);
+
+            m_level_meter_input = new LevelMeter();
+            connect(this, &Worker::destroyed, m_level_meter_input, &LevelMeter::deleteLater);
+            connect(m_level_meter_input, &LevelMeter::currentlevel, this, &Worker::inputLevel);
+            m_level_meter_input->start(m_streaming_info.inputAudioFormat());
+        }
+        else //used to compute level if not using the library input device
+        {
+            m_flow_control = new FlowControl(this);
+            connect(m_flow_control, &FlowControl::getbytes, this, &Worker::flowControl);
+            connect(m_flow_control, &FlowControl::error, this, &Worker::errorPrivate);
+
+            QAudioFormat inputFormat = m_streaming_info.inputAudioFormat();
+
+            adjustSettingsPrivate(true, true, false);
+
+            m_level_meter_input = new LevelMeter();
+            connect(this, &Worker::destroyed, m_level_meter_input, &LevelMeter::deleteLater);
+            connect(m_level_meter_input, &LevelMeter::currentlevel, this, &Worker::inputLevel);
+            m_level_meter_input->start(m_streaming_info.inputAudioFormat());
+
+            m_flow_control->start(inputFormat.sampleRate(),
+                                  inputFormat.channelCount(),
+                                  inputFormat.sampleSize());
+        }
+
+        if (m_streaming_info.outputDeviceType() == StreamingInfo::AudioDeviceType::LibraryAudioDevice)
+        {
+            m_audio_output = new AudioOutput();
+
+            if (m_streaming_info.isGetAudioEnabled())
+                connect(m_audio_output, &AudioOutput::veryOutputData, this, &Worker::veryOutputData);
+
+            connect(this, &Worker::destroyed, m_audio_output, &AudioOutput::deleteLater);
+
+            connect(m_audio_output, &AudioOutput::error, this, &Worker::errorPrivate);
+            connect(m_audio_output, &AudioOutput::currentlevel, this, &Worker::outputLevel);
+
+            QAudioFormat format = m_streaming_info.audioFormat();
+
+            m_audio_output->setVolume(m_volume);
+        }
+        else //used to compute level if not using the library output device
+        {
+            m_level_meter_output = new LevelMeter();
+            connect(this, &Worker::destroyed, m_level_meter_output, &LevelMeter::deleteLater);
+            connect(m_level_meter_output, &LevelMeter::currentlevel, this, &Worker::outputLevel);
+
+            QAudioFormat format = m_streaming_info.audioFormat();
+
+            m_level_meter_output->start(format);
+        }
+
+        if (m_streaming_info.isEncryptionEnabled())
+        {
+            m_client = new WebClient(this);
+        }
+        else
+        {
+            errorPrivate("WebClient requires encryption enabled!");
+            return;
+        }
+
+        connect(m_client, &AbstractClient::error, this, &Worker::errorPrivate);
+        connect(m_client, &AbstractClient::connectedToServer, this, &Worker::webClientConencted);
+        connect(m_client, &AbstractClient::connectedToPeer, this, &Worker::webClientConnectedToPeer);
+        connect(m_client, &AbstractClient::disconnected, this, &Worker::webClientDisconencted);
+        connect(m_client, &AbstractClient::pending, this, &Worker::pending);
+        connect(m_client, &AbstractClient::readyRead, this, &Worker::processWebClientInput);
+
         break;
     }
-}
-
-void Worker::setKeys(const QByteArray &private_key, const QByteArray &public_key)
-{
-    if (m_server)
-    {
-        m_server->setKeys(private_key, public_key);
-    }
-    else
-    {
-        errorPrivate("Not started in server mode!");
-        return;
+    default:
+        break;
     }
 }
 
@@ -378,20 +487,34 @@ void Worker::connectToHost(const QString &host, quint16 port, const QByteArray &
     }
 }
 
+void Worker::connectToPeer(const QString &ID)
+{
+    if (m_streaming_info.workMode() == StreamingInfo::StreamingWorkMode::WebClient)
+    {
+        m_client->connectToPeer(ID);
+    }
+}
+
+void Worker::acceptSslCertificate()
+{
+    if (m_client)
+        m_client->acceptSslCertificate();
+}
+
 void Worker::acceptConnection()
 {
-    if (!m_server)
-        return;
-
-    m_server->acceptNewConnection();
+    if (m_server)
+        m_server->acceptNewConnection();
+    else if (m_client)
+        m_client->acceptConnection();
 }
 
 void Worker::rejectConnection()
 {
-    if (!m_server)
-        return;
-
-    m_server->rejectNewConnection();
+    if (m_server)
+        m_server->rejectNewConnection();
+    else if (m_client)
+        m_client->rejectConnection();
 }
 
 void Worker::errorPrivate(const QString &error_description)
@@ -416,6 +539,7 @@ void Worker::startOpusEncoder()
         break;
     case StreamingInfo::StreamingWorkMode::WalkieTalkieClient:
     case StreamingInfo::StreamingWorkMode::WalkieTalkieServer:
+    case StreamingInfo::StreamingWorkMode::WebClient:
         application = OPUS_APPLICATION_VOIP;
         break;
     default:
@@ -542,6 +666,7 @@ void Worker::serverClientConencted(const PeerData &pd, const QString &id)
     m_host_connections_list.append(pd.host);
 
     m_hash_pkts_pending[pd.descriptor] = 0;
+    m_hash_limit_reached[pd.descriptor] = false;
     m_hash_max_pkts_pending[pd.descriptor] = 0;
 
     emit connected(pd.host, id);
@@ -572,6 +697,7 @@ void Worker::serverClientDisconencted(const PeerData &pd)
     }
 
     m_hash_pkts_pending.remove(pd.descriptor);
+    m_hash_limit_reached.remove(pd.descriptor);
     m_hash_max_pkts_pending.remove(pd.descriptor);
 
     emit disconnected(pd.host);
@@ -586,6 +712,7 @@ void Worker::clientConencted(const PeerData &pd, const QString &id)
     m_host_connections_list.append(pd.host);
 
     m_hash_pkts_pending[pd.descriptor] = 0;
+    m_hash_limit_reached[pd.descriptor] = false;
     m_hash_max_pkts_pending[pd.descriptor] = 0;
 
     emit connected(pd.host, id);
@@ -616,6 +743,60 @@ void Worker::clientDisconencted(const PeerData &pd)
     }
 
     m_hash_pkts_pending.remove(pd.descriptor);
+    m_hash_limit_reached.remove(pd.descriptor);
+    m_hash_max_pkts_pending.remove(pd.descriptor);
+
+    emit disconnected(pd.host);
+}
+
+void Worker::webClientConencted(const QByteArray &hash)
+{
+    emit connectedToServer(hash);
+}
+
+//The app is currently connected to the server
+void Worker::webClientConnectedToPeer(const PeerData &pd, const QString &id)
+{
+    //Send the audio format to the peer
+    QByteArray data;
+    data.append(getBytes<quint8>(Command::AudioHeader));
+    data.append(createHeader());
+
+    m_client->write(data);
+
+    QByteArray result;
+    result.append(getBytes<quint8>(Command::RemoteBufferTime));
+    result.append(getBytes<qint32>(qMax(qCeil(m_streaming_info.timeToBuffer() / (qreal)10), 5)));
+
+    m_client->write(result);
+
+    m_ready_to_write_extra_data = true;
+
+    m_id_connections_list.append(pd.descriptor);
+    m_host_connections_list.append(pd.host);
+
+    m_hash_pkts_pending[pd.descriptor] = 0;
+    m_hash_limit_reached[pd.descriptor] = false;
+    m_hash_max_pkts_pending[pd.descriptor] = 0;
+
+    emit connected(pd.host, id);
+}
+
+//The app currently disconnected from the server
+void Worker::webClientDisconencted(const PeerData &pd)
+{
+    m_ready_to_write_extra_data = false;
+
+    int index = m_id_connections_list.indexOf(pd.descriptor);
+
+    if (index >= 0)
+    {
+        m_id_connections_list.removeAt(index);
+        m_host_connections_list.removeAt(index);
+    }
+
+    m_hash_pkts_pending.remove(pd.descriptor);
+    m_hash_limit_reached.remove(pd.descriptor);
     m_hash_max_pkts_pending.remove(pd.descriptor);
 
     emit disconnected(pd.host);
@@ -691,11 +872,19 @@ void Worker::posProcessedInput(const QByteArray &data)
         {
             int *pending = &m_hash_pkts_pending[descriptor];
 
-            if (*pending <= m_hash_max_pkts_pending[descriptor])
+            if (*pending <= m_hash_max_pkts_pending[descriptor] && !m_hash_limit_reached[descriptor])
             {
+                LIB_DEBUG_LEVEL_2("Sent Audio Data - Size:" << result.size() << "bytes.");
+
                 (*pending)++;
 
                 m_server->writeToHost(result, descriptor);
+            }
+            else if (*pending > m_hash_max_pkts_pending[descriptor])
+            {
+                LIB_DEBUG_LEVEL_2("Not Sent Audio Data - Size:" << result.size() << "bytes.");
+
+                m_hash_limit_reached[descriptor] = true;
             }
         }
     }
@@ -705,11 +894,15 @@ void Worker::posProcessedInput(const QByteArray &data)
         {
             int *pending = &m_hash_pkts_pending[descriptor];
 
-            if (*pending <= m_hash_max_pkts_pending[descriptor])
+            if (*pending <= m_hash_max_pkts_pending[descriptor] && !m_hash_limit_reached[descriptor])
             {
                 (*pending)++;
 
                 m_client->write(result);
+            }
+            else if (*pending > m_hash_max_pkts_pending[descriptor])
+            {
+                m_hash_limit_reached[descriptor] = true;
             }
         }
     }
@@ -853,6 +1046,9 @@ void Worker::processServerInput(const PeerData &pd)
 
         *pending = qMax(*pending, 0);
 
+        if (*pending == 0)
+            m_hash_limit_reached[pd.descriptor] = false;
+
         break;
     }
     case Command::RemoteBufferTime:
@@ -974,6 +1170,8 @@ void Worker::processClientInput(const PeerData &pd)
     }
     case Command::AudioData:
     {
+        LIB_DEBUG_LEVEL_2("Got Audio Data - Size:" << data.size() << "bytes.");
+
         QByteArray result;
         result.append(getBytes<quint8>(Command::AudioDataReceived));
 
@@ -996,6 +1194,9 @@ void Worker::processClientInput(const PeerData &pd)
         (*pending)--;
 
         *pending = qMax(*pending, 0);
+
+        if (*pending == 0)
+            m_hash_limit_reached[pd.descriptor] = false;
 
         break;
     }
@@ -1036,7 +1237,157 @@ void Worker::processClientInput(const PeerData &pd)
         }
 
         break;
+    }
+    default:
+    {
+        m_client->abort();
+        return;
+    }
+    }
+}
 
+void Worker::processWebClientInput(const PeerData &pd)
+{
+    QByteArray data = QByteArray(pd.data);
+
+    if (data.isEmpty())
+    {
+        m_client->abort();
+        return;
+    }
+
+    quint8 command = getValue<quint8>(data.mid(0, 1));
+    data.remove(0, 1);
+
+    switch (command)
+    {
+    case Command::AudioHeader:
+    {
+        //Header got by the server
+
+        if (data.size() != 56)
+        {
+            m_client->abort();
+            return;
+        }
+
+        QAudioFormat inputFormat;
+        QAudioFormat audioFormat;
+
+        header(data, &inputFormat, &audioFormat);
+
+        if (INVALID_FORMAT)
+        {
+            errorPrivate("Sample type and/or endiannes not supported!");
+            return;
+        }
+
+        if (m_streaming_info.inputAudioFormat() != inputFormat ||
+                m_streaming_info.audioFormat() != audioFormat)
+        {
+            errorPrivate("Incompatible audio formats!");
+            return;
+        }
+
+        adjustSettingsPrivate(true, true, true);
+
+        {
+            m_level_meter_input = new LevelMeter();
+            connect(this, &Worker::destroyed, m_level_meter_input, &LevelMeter::deleteLater);
+            connect(m_level_meter_input, &LevelMeter::currentlevel, this, &Worker::inputLevel);
+            m_level_meter_input->start(m_streaming_info.inputAudioFormat());
+
+            if (m_flow_control)
+                m_flow_control->start(inputFormat.sampleRate(), inputFormat.channelCount(), inputFormat.sampleSize());
+            else
+                m_audio_input->start(m_streaming_info.inputDeviceInfo(), m_streaming_info.inputAudioFormat());
+        }
+
+        m_audio_output->start(m_streaming_info.outputDeviceInfo(),
+                              m_streaming_info.audioFormat(),
+                              m_streaming_info.timeToBuffer(),
+                              m_streaming_info.isGetAudioEnabled());
+
+        if (m_level_meter_output)
+            m_level_meter_output->start(m_streaming_info.audioFormat());
+
+        QByteArray result;
+        result.append(getBytes<quint8>(Command::RemoteBufferTime));
+        result.append(getBytes<qint32>(qMax(qCeil(m_streaming_info.timeToBuffer() / (qreal)10), 5)));
+
+        m_client->write(result);
+
+        break;
+    }
+    case Command::AudioData:
+    {
+        LIB_DEBUG_LEVEL_2("Got Audio Data - Size:" << data.size() << "bytes.");
+
+        QByteArray result;
+        result.append(getBytes<quint8>(Command::AudioDataReceived));
+
+        m_client->write(result);
+
+        preProcessOutput(data);
+
+        break;
+    }
+    case Command::AudioDataReceived:
+    {
+        if (!data.isEmpty())
+        {
+            m_client->abort();
+            return;
+        }
+
+        int *pending = &m_hash_pkts_pending[pd.descriptor];
+
+        (*pending)--;
+
+        *pending = qMax(*pending, 0);
+
+        if (*pending == 0)
+            m_hash_limit_reached[pd.descriptor] = false;
+
+        break;
+    }
+    case Command::RemoteBufferTime:
+    {
+        if (data.size() != 4)
+        {
+            m_client->abort();
+            return;
+        }
+
+        m_hash_max_pkts_pending[pd.descriptor] = getValue<qint32>(data);
+
+        break;
+    }
+    case Command::ExtraData:
+    {
+        emit extraData(data);
+
+        break;
+    }
+    case Command::ExtraDataReceived:
+    {
+        if (!data.isEmpty())
+        {
+            m_client->abort();
+            return;
+        }
+
+        m_extra_data_peers--;
+
+        m_extra_data_peers = qMax(m_extra_data_peers, 0);
+
+        if (m_extra_data_peers == 0)
+        {
+            m_ready_to_write_extra_data = true;
+            emit extraDataWritten();
+        }
+
+        break;
     }
     default:
     {

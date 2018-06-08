@@ -1,7 +1,5 @@
 QT +=       core gui widgets multimedia concurrent
 
-android:QT += androidextras
-
 TARGET =    BroadcastClient
 TEMPLATE =  app
 
@@ -20,13 +18,6 @@ HEADERS  += mainwindow.h \
             spectrumanalyzer.h \
             waveformwidget.h \
             audiorecorder.h
-
-android {
-SOURCES += \
-        keepandroidawake.cpp
-HEADERS += \
-        keepandroidawake.h
-}
 
 INCLUDEPATH += $$PWD/3rdparty/kiss_fft130
 SOURCES += $$PWD/3rdparty/kiss_fft130/kiss_fft.c
