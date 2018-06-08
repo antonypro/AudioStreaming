@@ -24,7 +24,10 @@ macx:INCLUDEPATH += $$MACOS_OPUS_INCLUDE
 INCLUDEPATH += $$PWD/AudioStreamingLib
 
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> 989812a15fd868013e2d54ad8ee6e4449f378b62
 contains(QT_ARCH, i386):win32-g++ { #MINGW 32 bits
 message("Using settings for Windows MinGW 32 bits")
 
@@ -63,8 +66,31 @@ LIBS += $$MINGW_64BITS_OPENSSL_SSL_LIB
 LIBS += $$MINGW_64BITS_OPENSSL_CRYPTO_LIB
 LIBS += -lGdi32
 }
+<<<<<<< HEAD
 } #MINGW 64 bits
+=======
+} #MINGW 32 bits
 
+
+contains(QT_ARCH, x86_64):win32-g++ { #MINGW 64 bits
+message("Using settings for Windows MinGW 64 bits")
+
+CONFIG += KNOWNDEVICE
+>>>>>>> 989812a15fd868013e2d54ad8ee6e4449f378b62
+
+!AUDIOSTREAMINGLIB:INCLUDEPATH += $$PWD/AudioStreamingLibCore/include
+
+CONFIG(debug, debug|release):!AUDIOSTREAMINGLIB:LIBS += -L"$$PWD/AudioStreamingLibCore/lib/x64/Debug/" -lAudioStreamingLibCore
+CONFIG(release, debug|release):!AUDIOSTREAMINGLIB:LIBS += -L"$$PWD/AudioStreamingLibCore/lib/x64/Release/" -lAudioStreamingLibCore
+
+WITH_OPUS:LIBS += $$MINGW_OPUS_LIB
+
+WITH_OPENSSL {
+LIBS += $$MINGW_OPENSSL_SSL_LIB
+LIBS += $$MINGW_OPENSSL_CRYPTO_LIB
+LIBS += -lGdi32
+}
+} #MINGW 64 bits
 
 
 contains(QT_ARCH, i386):win32-msvc* { #VISUAL STUDIO 32 bits
