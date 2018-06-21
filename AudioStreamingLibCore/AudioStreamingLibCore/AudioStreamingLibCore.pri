@@ -80,14 +80,14 @@ SOURCES += $$MACOS_R8BRAIN_RESAMPLER_INCLUDE/r8bbase.cpp
 
 #Copy header files
 
-createdir.commands = $$sprintf($$QMAKE_MKDIR_CMD, $$shell_path($$PWD/../include))
-copydata1.commands = $(COPY_FILE) $$shell_path($$PWD/AudioStreamingLibCore) $$shell_path($$PWD/../include)
-copydata2.commands = $(COPY_FILE) $$shell_path($$PWD/audiostreaminglibcore.h) $$shell_path($$PWD/../include)
-copydata3.commands = $(COPY_FILE) $$shell_path($$PWD/discoverclient.h) $$shell_path($$PWD/../include)
+createdir.commands = $(MKDIR) $$PWD/../include
+copyfile1.commands = $(COPY_FILE) $$PWD/AudioStreamingLibCore $$PWD/../include
+copyfile2.commands = $(COPY_FILE) $$PWD/audiostreaminglibcore.h $$PWD/../include
+copyfile3.commands = $(COPY_FILE) $$PWD/discoverclient.h $$PWD/../include
 
-first.depends = $(first) createdir copydata1 copydata2 copydata3
+first.depends = $(first) createdir copyfile1 copyfile2 copyfile3
 
-QMAKE_EXTRA_TARGETS += first createdir copydata1 copydata2 copydata3
+QMAKE_EXTRA_TARGETS += first createdir copyfile1 copyfile2 copyfile3
 
 #Set output directory
 

@@ -72,10 +72,8 @@ void Worker::start(const StreamingInfo &streaming_info)
         m_callback_enabled = m_streaming_info.isCallBackEnabled();
 
 #ifdef OPUS
-        m_opus_dec = new OpusDecoderClass();
+        m_opus_dec = new OpusDecoderClass(this);
         {
-            connect(this, &Worker::destroyed, m_opus_dec, &OpusDecoderClass::deleteLater);
-
             connect(m_opus_dec, &OpusDecoderClass::decoded, this, &Worker::posProcessedOutput);
         }
         connect(m_opus_dec, &OpusDecoderClass::error, this, &Worker::errorPrivate);
@@ -92,11 +90,9 @@ void Worker::start(const StreamingInfo &streaming_info)
 
         if (m_streaming_info.outputDeviceType() == StreamingInfo::AudioDeviceType::LibraryAudioDevice)
         {
-            m_audio_output = new AudioOutput();
+            m_audio_output = new AudioOutput(this);
             if (m_streaming_info.isGetAudioEnabled())
                 connect(m_audio_output, &AudioOutput::veryOutputData, this, &Worker::veryOutputData);
-
-            connect(this, &Worker::destroyed, m_audio_output, &AudioOutput::deleteLater);
 
             connect(m_audio_output, &AudioOutput::error, this, &Worker::errorPrivate);
             connect(m_audio_output, &AudioOutput::currentlevel, this, &Worker::outputLevel);
@@ -105,8 +101,7 @@ void Worker::start(const StreamingInfo &streaming_info)
         }
         else //used to compute level if not using the library output device
         {
-            m_level_meter_output = new LevelMeter();
-            connect(this, &Worker::destroyed, m_level_meter_output, &LevelMeter::deleteLater);
+            m_level_meter_output = new LevelMeter(this);
             connect(m_level_meter_output, &LevelMeter::currentlevel, this, &Worker::outputLevel);
         }
 
@@ -115,13 +110,10 @@ void Worker::start(const StreamingInfo &streaming_info)
     case StreamingInfo::StreamingWorkMode::BroadcastServer:
     {
         m_callback_enabled = m_streaming_info.isCallBackEnabled();
-
 #ifdef OPUS
-        m_resampler = new r8brain();
-        m_opus_enc = new OpusEncoderClass();
+        m_resampler = new r8brain(this);
+        m_opus_enc = new OpusEncoderClass(this);
         {
-            connect(this, &Worker::destroyed, m_resampler, &r8brain::deleteLater);
-
             connect(m_resampler, &r8brain::error, this, &Worker::errorPrivate);
             connect(m_resampler, &r8brain::resampled, m_opus_enc, &OpusEncoderClass::write);
 
@@ -129,8 +121,6 @@ void Worker::start(const StreamingInfo &streaming_info)
                 connect(m_resampler, &r8brain::resampled, this, &Worker::veryInputData);
         }
         {
-            connect(this, &Worker::destroyed, m_opus_enc, &OpusEncoderClass::deleteLater);
-
             connect(m_opus_enc, &OpusEncoderClass::encoded, this, &Worker::posProcessedInput);
         }
         connect(m_opus_enc, &OpusEncoderClass::error, this, &Worker::errorPrivate);
@@ -150,8 +140,7 @@ void Worker::start(const StreamingInfo &streaming_info)
 
         if (m_streaming_info.inputDeviceType() == StreamingInfo::AudioDeviceType::LibraryAudioDevice)
         {
-            m_audio_input = new AudioInput();
-            connect(this, &Worker::destroyed, m_audio_input, &AudioInput::deleteLater);
+            m_audio_input = new AudioInput(this);
 
             connect(m_audio_input, &AudioInput::error, this, &Worker::errorPrivate);
 
@@ -174,8 +163,7 @@ void Worker::start(const StreamingInfo &streaming_info)
 
         adjustSettingsPrivate(true, false, false);
 
-        m_level_meter_input = new LevelMeter();
-        connect(this, &Worker::destroyed, m_level_meter_input, &LevelMeter::deleteLater);
+        m_level_meter_input = new LevelMeter(this);
         connect(m_level_meter_input, &LevelMeter::currentlevel, this, &Worker::inputLevel);
         m_level_meter_input->start(m_streaming_info.inputAudioFormat());
 
@@ -188,14 +176,12 @@ void Worker::start(const StreamingInfo &streaming_info)
 
         m_is_walkie_talkie = true;
 #ifdef OPUS
-        m_resampler = new r8brain();
-        m_opus_enc = new OpusEncoderClass();
-        m_opus_dec = new OpusDecoderClass();
+        m_resampler = new r8brain(this);
+        m_opus_enc = new OpusEncoderClass(this);
+        m_opus_dec = new OpusDecoderClass(this);
         connect(m_opus_enc, &OpusEncoderClass::error, this, &Worker::errorPrivate);
         connect(m_opus_dec, &OpusDecoderClass::error, this, &Worker::errorPrivate);
         {
-            connect(this, &Worker::destroyed, m_resampler, &r8brain::deleteLater);
-
             connect(m_resampler, &r8brain::error, this, &Worker::errorPrivate);
             connect(m_resampler, &r8brain::resampled, m_opus_enc, &OpusEncoderClass::write);
 
@@ -203,21 +189,15 @@ void Worker::start(const StreamingInfo &streaming_info)
                 connect(m_resampler, &r8brain::resampled, this, &Worker::veryInputData);
         }
         {
-            connect(this, &Worker::destroyed, m_opus_enc, &OpusEncoderClass::deleteLater);
-
             connect(m_opus_enc, &OpusEncoderClass::encoded, this, &Worker::posProcessedInput);
         }
         {
-            connect(this, &Worker::destroyed, m_opus_dec, &OpusDecoderClass::deleteLater);
-
             connect(m_opus_dec, &OpusDecoderClass::decoded, this, &Worker::posProcessedOutput);
         }
 #endif
         if (m_streaming_info.inputDeviceType() == StreamingInfo::AudioDeviceType::LibraryAudioDevice)
         {
-            m_audio_input = new AudioInput();
-
-            connect(this, &Worker::destroyed, m_audio_input, &AudioInput::deleteLater);
+            m_audio_input = new AudioInput(this);
 
             connect(m_audio_input, &AudioInput::error, this, &Worker::errorPrivate);
 
@@ -230,8 +210,7 @@ void Worker::start(const StreamingInfo &streaming_info)
             {
                 adjustSettingsPrivate(true, true, false);
 
-                m_level_meter_input = new LevelMeter();
-                connect(this, &Worker::destroyed, m_level_meter_input, &LevelMeter::deleteLater);
+                m_level_meter_input = new LevelMeter(this);
                 connect(m_level_meter_input, &LevelMeter::currentlevel, this, &Worker::inputLevel);
                 m_level_meter_input->start(m_streaming_info.inputAudioFormat());
 
@@ -250,8 +229,7 @@ void Worker::start(const StreamingInfo &streaming_info)
 
                 adjustSettingsPrivate(true, true, false);
 
-                m_level_meter_input = new LevelMeter();
-                connect(this, &Worker::destroyed, m_level_meter_input, &LevelMeter::deleteLater);
+                m_level_meter_input = new LevelMeter(this);
                 connect(m_level_meter_input, &LevelMeter::currentlevel, this, &Worker::inputLevel);
                 m_level_meter_input->start(m_streaming_info.inputAudioFormat());
 
@@ -263,12 +241,10 @@ void Worker::start(const StreamingInfo &streaming_info)
 
         if (m_streaming_info.outputDeviceType() == StreamingInfo::AudioDeviceType::LibraryAudioDevice)
         {
-            m_audio_output = new AudioOutput();
+            m_audio_output = new AudioOutput(this);
 
             if (m_streaming_info.isGetAudioEnabled())
                 connect(m_audio_output, &AudioOutput::veryOutputData, this, &Worker::veryOutputData);
-
-            connect(this, &Worker::destroyed, m_audio_output, &AudioOutput::deleteLater);
 
             connect(m_audio_output, &AudioOutput::error, this, &Worker::errorPrivate);
             connect(m_audio_output, &AudioOutput::currentlevel, this, &Worker::outputLevel);
@@ -286,8 +262,7 @@ void Worker::start(const StreamingInfo &streaming_info)
         }
         else //used to compute level if not using the library output device
         {
-            m_level_meter_output = new LevelMeter();
-            connect(this, &Worker::destroyed, m_level_meter_output, &LevelMeter::deleteLater);
+            m_level_meter_output = new LevelMeter(this);
             connect(m_level_meter_output, &LevelMeter::currentlevel, this, &Worker::outputLevel);
 
             if (m_streaming_info.workMode() == StreamingInfo::StreamingWorkMode::WalkieTalkieServer)
@@ -334,14 +309,12 @@ void Worker::start(const StreamingInfo &streaming_info)
 
         m_is_walkie_talkie = true;
 #ifdef OPUS
-        m_resampler = new r8brain();
-        m_opus_enc = new OpusEncoderClass();
-        m_opus_dec = new OpusDecoderClass();
+        m_resampler = new r8brain(this);
+        m_opus_enc = new OpusEncoderClass(this);
+        m_opus_dec = new OpusDecoderClass(this);
         connect(m_opus_enc, &OpusEncoderClass::error, this, &Worker::errorPrivate);
         connect(m_opus_dec, &OpusDecoderClass::error, this, &Worker::errorPrivate);
         {
-            connect(this, &Worker::destroyed, m_resampler, &r8brain::deleteLater);
-
             connect(m_resampler, &r8brain::error, this, &Worker::errorPrivate);
             connect(m_resampler, &r8brain::resampled, m_opus_enc, &OpusEncoderClass::write);
 
@@ -349,21 +322,15 @@ void Worker::start(const StreamingInfo &streaming_info)
                 connect(m_resampler, &r8brain::resampled, this, &Worker::veryInputData);
         }
         {
-            connect(this, &Worker::destroyed, m_opus_enc, &OpusEncoderClass::deleteLater);
-
             connect(m_opus_enc, &OpusEncoderClass::encoded, this, &Worker::posProcessedInput);
         }
         {
-            connect(this, &Worker::destroyed, m_opus_dec, &OpusDecoderClass::deleteLater);
-
             connect(m_opus_dec, &OpusDecoderClass::decoded, this, &Worker::posProcessedOutput);
         }
 #endif
         if (m_streaming_info.inputDeviceType() == StreamingInfo::AudioDeviceType::LibraryAudioDevice)
         {
-            m_audio_input = new AudioInput();
-
-            connect(this, &Worker::destroyed, m_audio_input, &AudioInput::deleteLater);
+            m_audio_input = new AudioInput(this);
 
             connect(m_audio_input, &AudioInput::error, this, &Worker::errorPrivate);
 
@@ -374,8 +341,7 @@ void Worker::start(const StreamingInfo &streaming_info)
 
             adjustSettingsPrivate(true, true, false);
 
-            m_level_meter_input = new LevelMeter();
-            connect(this, &Worker::destroyed, m_level_meter_input, &LevelMeter::deleteLater);
+            m_level_meter_input = new LevelMeter(this);
             connect(m_level_meter_input, &LevelMeter::currentlevel, this, &Worker::inputLevel);
             m_level_meter_input->start(m_streaming_info.inputAudioFormat());
         }
@@ -389,8 +355,7 @@ void Worker::start(const StreamingInfo &streaming_info)
 
             adjustSettingsPrivate(true, true, false);
 
-            m_level_meter_input = new LevelMeter();
-            connect(this, &Worker::destroyed, m_level_meter_input, &LevelMeter::deleteLater);
+            m_level_meter_input = new LevelMeter(this);
             connect(m_level_meter_input, &LevelMeter::currentlevel, this, &Worker::inputLevel);
             m_level_meter_input->start(m_streaming_info.inputAudioFormat());
 
@@ -401,12 +366,10 @@ void Worker::start(const StreamingInfo &streaming_info)
 
         if (m_streaming_info.outputDeviceType() == StreamingInfo::AudioDeviceType::LibraryAudioDevice)
         {
-            m_audio_output = new AudioOutput();
+            m_audio_output = new AudioOutput(this);
 
             if (m_streaming_info.isGetAudioEnabled())
                 connect(m_audio_output, &AudioOutput::veryOutputData, this, &Worker::veryOutputData);
-
-            connect(this, &Worker::destroyed, m_audio_output, &AudioOutput::deleteLater);
 
             connect(m_audio_output, &AudioOutput::error, this, &Worker::errorPrivate);
             connect(m_audio_output, &AudioOutput::currentlevel, this, &Worker::outputLevel);
@@ -417,8 +380,7 @@ void Worker::start(const StreamingInfo &streaming_info)
         }
         else //used to compute level if not using the library output device
         {
-            m_level_meter_output = new LevelMeter();
-            connect(this, &Worker::destroyed, m_level_meter_output, &LevelMeter::deleteLater);
+            m_level_meter_output = new LevelMeter(this);
             connect(m_level_meter_output, &LevelMeter::currentlevel, this, &Worker::outputLevel);
 
             QAudioFormat format = m_streaming_info.audioFormat();
@@ -1141,8 +1103,7 @@ void Worker::processClientInput(const PeerData &pd)
 
         if (m_is_walkie_talkie)
         {
-            m_level_meter_input = new LevelMeter();
-            connect(this, &Worker::destroyed, m_level_meter_input, &LevelMeter::deleteLater);
+            m_level_meter_input = new LevelMeter(this);
             connect(m_level_meter_input, &LevelMeter::currentlevel, this, &Worker::inputLevel);
             m_level_meter_input->start(m_streaming_info.inputAudioFormat());
 
@@ -1292,8 +1253,7 @@ void Worker::processWebClientInput(const PeerData &pd)
         adjustSettingsPrivate(true, true, true);
 
         {
-            m_level_meter_input = new LevelMeter();
-            connect(this, &Worker::destroyed, m_level_meter_input, &LevelMeter::deleteLater);
+            m_level_meter_input = new LevelMeter(this);
             connect(m_level_meter_input, &LevelMeter::currentlevel, this, &Worker::inputLevel);
             m_level_meter_input->start(m_streaming_info.inputAudioFormat());
 

@@ -68,10 +68,11 @@ extern qint64 record_count;
 
 #define START_THREAD \
 {\
+setParent(nullptr);\
 QThread *thread = new QThread();\
-\
 moveToThread(thread);\
 \
+if (parent) connect(parent, &QObject::destroyed, this, &QObject::deleteLater);\
 connect(this, &QObject::destroyed, thread, &QThread::quit);\
 connect(thread, &QThread::finished, thread, &QThread::deleteLater);\
 \
