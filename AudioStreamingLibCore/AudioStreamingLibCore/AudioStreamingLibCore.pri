@@ -80,9 +80,9 @@ SOURCES += $$MACOS_R8BRAIN_RESAMPLER_INCLUDE/r8bbase.cpp
 
 #Copy header files
 
-copyfile1.commands = $(COPY_FILE) $$PWD/AudioStreamingLibCore $$PWD/../include
-copyfile2.commands = $(COPY_FILE) $$PWD/audiostreaminglibcore.h $$PWD/../include
-copyfile3.commands = $(COPY_FILE) $$PWD/discoverclient.h $$PWD/../include
+copyfile1.commands = $(COPY_FILE) $$shell_path($$PWD/AudioStreamingLibCore) $$shell_path($$PWD/../include)
+copyfile2.commands = $(COPY_FILE) $$shell_path($$PWD/audiostreaminglibcore.h) $$shell_path($$PWD/../include)
+copyfile3.commands = $(COPY_FILE) $$shell_path($$PWD/discoverclient.h) $$shell_path($$PWD/../include)
 
 first.depends = $(first) copyfile1 copyfile2 copyfile3
 
