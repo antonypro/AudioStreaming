@@ -16,7 +16,7 @@ namespace internal {
 namespace {
 
 EIGEN_DEVICE_FUNC uint64_t get_random_seed() {
-#ifdef EIGEN_CUDA_ARCH
+#ifdef __CUDA_ARCH__
   // We don't support 3d kernels since we currently only use 1 and
   // 2d kernels.
   assert(threadIdx.z == 0);
@@ -55,11 +55,11 @@ EIGEN_DEVICE_FUNC uint64_t get_random_seed() {
 #endif
 }
 
-static EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE unsigned PCG_XSH_RS_generator(uint64_t* state, uint64_t stream) {
+static EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE unsigned PCG_XSH_RS_generator(uint64_t* state) {
   // TODO: Unify with the implementation in the non blocking thread pool.
   uint64_t current = *state;
   // Update the internal state
-  *state = current * 6364136223846793005ULL + (stream << 1 | 1);
+  *state = current * 6364136223846793005ULL + 0xda3e39cb94b95bdbULL;
   // Generate the random output (using the PCG-XSH-RS scheme)
   return static_cast<unsigned>((current ^ (current >> 22)) >> (22 + (current >> 61)));
 }
@@ -73,17 +73,17 @@ static EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE uint64_t PCG_XSH_RS_state(uint64_t 
 
 
 template <typename T> EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE
-T RandomToTypeUniform(uint64_t* state, uint64_t stream) {
-  unsigned rnd = PCG_XSH_RS_generator(state, stream);
+T RandomToTypeUniform(uint64_t* state) {
+  unsigned rnd = PCG_XSH_RS_generator(state);
   return static_cast<T>(rnd);
 }
 
 
 template <> EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE
-Eigen::half RandomToTypeUniform<Eigen::half>(uint64_t* state, uint64_t stream) {
+Eigen::half RandomToTypeUniform<Eigen::half>(uint64_t* state) {
   Eigen::half result;
   // Generate 10 random bits for the mantissa
-  unsigned rnd = PCG_XSH_RS_generator(state, stream);
+  unsigned rnd = PCG_XSH_RS_generator(state);
   result.x = static_cast<uint16_t>(rnd & 0x3ffu);
   // Set the exponent
   result.x |= (static_cast<uint16_t>(15) << 10);
@@ -93,14 +93,14 @@ Eigen::half RandomToTypeUniform<Eigen::half>(uint64_t* state, uint64_t stream) {
 
 
 template <> EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE
-float RandomToTypeUniform<float>(uint64_t* state, uint64_t stream) {
+float RandomToTypeUniform<float>(uint64_t* state) {
   typedef union {
     uint32_t raw;
     float fp;
   } internal;
   internal result;
   // Generate 23 random bits for the mantissa mantissa
-  const unsigned rnd = PCG_XSH_RS_generator(state, stream);
+  const unsigned rnd = PCG_XSH_RS_generator(state);
   result.raw = rnd & 0x7fffffu;
   // Set the exponent
   result.raw |= (static_cast<uint32_t>(127) << 23);
@@ -109,7 +109,7 @@ float RandomToTypeUniform<float>(uint64_t* state, uint64_t stream) {
 }
 
 template <> EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE
-double RandomToTypeUniform<double>(uint64_t* state, uint64_t stream) {
+double RandomToTypeUniform<double>(uint64_t* state) {
   typedef union {
     uint64_t raw;
     double dp;
@@ -118,9 +118,9 @@ double RandomToTypeUniform<double>(uint64_t* state, uint64_t stream) {
   result.raw = 0;
   // Generate 52 random bits for the mantissa
   // First generate the upper 20 bits
-  unsigned rnd1 = PCG_XSH_RS_generator(state, stream) & 0xfffffu;
+  unsigned rnd1 = PCG_XSH_RS_generator(state) & 0xfffffu;
   // The generate the lower 32 bits
-  unsigned rnd2 = PCG_XSH_RS_generator(state, stream);
+  unsigned rnd2 = PCG_XSH_RS_generator(state);
   result.raw = (static_cast<uint64_t>(rnd1) << 32) | rnd2;
   // Set the exponent
   result.raw |= (static_cast<uint64_t>(1023) << 52);
@@ -129,14 +129,14 @@ double RandomToTypeUniform<double>(uint64_t* state, uint64_t stream) {
 }
 
 template <> EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE
-std::complex<float> RandomToTypeUniform<std::complex<float> >(uint64_t* state, uint64_t stream) {
-  return std::complex<float>(RandomToTypeUniform<float>(state, stream),
-                             RandomToTypeUniform<float>(state, stream));
+std::complex<float> RandomToTypeUniform<std::complex<float> >(uint64_t* state) {
+  return std::complex<float>(RandomToTypeUniform<float>(state),
+                             RandomToTypeUniform<float>(state));
 }
 template <> EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE
-std::complex<double> RandomToTypeUniform<std::complex<double> >(uint64_t* state, uint64_t stream) {
-  return std::complex<double>(RandomToTypeUniform<double>(state, stream),
-                              RandomToTypeUniform<double>(state, stream));
+std::complex<double> RandomToTypeUniform<std::complex<double> >(uint64_t* state) {
+  return std::complex<double>(RandomToTypeUniform<double>(state),
+                              RandomToTypeUniform<double>(state));
 }
 
 template <typename T> class UniformRandomGenerator {
@@ -155,7 +155,9 @@ template <typename T> class UniformRandomGenerator {
 
   template<typename Index> EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE
   T operator()(Index i) const {
-    T result = RandomToTypeUniform<T>(&m_state, i);
+    uint64_t local_state = m_state + i;
+    T result = RandomToTypeUniform<T>(&local_state);
+    m_state = local_state;
     return result;
   }
 
@@ -163,9 +165,11 @@ template <typename T> class UniformRandomGenerator {
   Packet packetOp(Index i) const {
     const int packetSize = internal::unpacket_traits<Packet>::size;
     EIGEN_ALIGN_MAX T values[packetSize];
+    uint64_t local_state = m_state + i;
     for (int j = 0; j < packetSize; ++j) {
-      values[j] = RandomToTypeUniform<T>(&m_state, i);
+      values[j] = RandomToTypeUniform<T>(&local_state);
     }
+    m_state = local_state;
     return internal::pload<Packet>(values);
   }
 
@@ -186,14 +190,14 @@ struct functor_traits<UniformRandomGenerator<Scalar> > {
 
 
 template <typename T> EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE
-T RandomToTypeNormal(uint64_t* state, uint64_t stream) {
+T RandomToTypeNormal(uint64_t* state) {
   // Use the ratio of uniform method to generate numbers following a normal
   // distribution. See for example Numerical Recipes chapter 7.3.9 for the
   // details.
   T u, v, q;
   do {
-    u = RandomToTypeUniform<T>(state, stream);
-    v = T(1.7156) * (RandomToTypeUniform<T>(state, stream) - T(0.5));
+    u = RandomToTypeUniform<T>(state);
+    v = T(1.7156) * (RandomToTypeUniform<T>(state) - T(0.5));
     const T x = u - T(0.449871);
     const T y = numext::abs(v) + T(0.386595);
     q = x*x + y * (T(0.196)*y - T(0.25472)*x);
@@ -204,14 +208,14 @@ T RandomToTypeNormal(uint64_t* state, uint64_t stream) {
 }
 
 template <> EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE
-std::complex<float> RandomToTypeNormal<std::complex<float> >(uint64_t* state, uint64_t stream) {
-  return std::complex<float>(RandomToTypeNormal<float>(state, stream),
-                             RandomToTypeNormal<float>(state, stream));
+std::complex<float> RandomToTypeNormal<std::complex<float> >(uint64_t* state) {
+  return std::complex<float>(RandomToTypeNormal<float>(state),
+                             RandomToTypeNormal<float>(state));
 }
 template <> EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE
-std::complex<double> RandomToTypeNormal<std::complex<double> >(uint64_t* state, uint64_t stream) {
-  return std::complex<double>(RandomToTypeNormal<double>(state, stream),
-                              RandomToTypeNormal<double>(state, stream));
+std::complex<double> RandomToTypeNormal<std::complex<double> >(uint64_t* state) {
+  return std::complex<double>(RandomToTypeNormal<double>(state),
+                              RandomToTypeNormal<double>(state));
 }
 
 
@@ -230,7 +234,9 @@ template <typename T> class NormalRandomGenerator {
 
  template<typename Index> EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE
   T operator()(Index i) const {
-    T result = RandomToTypeNormal<T>(&m_state, i);
+    uint64_t local_state = m_state + i;
+    T result = RandomToTypeNormal<T>(&local_state);
+    m_state = local_state;
     return result;
   }
 
@@ -238,9 +244,11 @@ template <typename T> class NormalRandomGenerator {
   Packet packetOp(Index i) const {
     const int packetSize = internal::unpacket_traits<Packet>::size;
     EIGEN_ALIGN_MAX T values[packetSize];
+    uint64_t local_state = m_state + i;
     for (int j = 0; j < packetSize; ++j) {
-      values[j] = RandomToTypeNormal<T>(&m_state, i);
+      values[j] = RandomToTypeNormal<T>(&local_state);
     }
+    m_state = local_state;
     return internal::pload<Packet>(values);
   }
 

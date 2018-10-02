@@ -33,7 +33,7 @@ struct functor_traits<scalar_mod_op<Scalar> >
  */
 template <typename Scalar>
 struct scalar_mod2_op {
-  EIGEN_EMPTY_STRUCT_CTOR(scalar_mod2_op)
+  EIGEN_EMPTY_STRUCT_CTOR(scalar_mod2_op);
   EIGEN_DEVICE_FUNC inline Scalar operator() (const Scalar& a, const Scalar& b) const { return a % b; }
 };
 template <typename Scalar>
@@ -42,7 +42,7 @@ struct functor_traits<scalar_mod2_op<Scalar> >
 
 template <typename Scalar>
 struct scalar_fmod_op {
-  EIGEN_EMPTY_STRUCT_CTOR(scalar_fmod_op)
+  EIGEN_EMPTY_STRUCT_CTOR(scalar_fmod_op);
   EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE Scalar
   operator()(const Scalar& a, const Scalar& b) const {
     return numext::fmod(a, b);
@@ -166,8 +166,7 @@ template <typename T> struct MeanReducer
     return pset1<Packet>(initialize());
   }
   EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE T finalize(const T accum) const {
-    internal::scalar_quotient_op<T> quotient_op;
-    return quotient_op(accum, T(scalarCount_));
+    return accum / scalarCount_;
   }
   template <typename Packet>
   EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE Packet finalizePacket(const Packet& vaccum) const {
@@ -176,10 +175,7 @@ template <typename T> struct MeanReducer
   template <typename Packet>
   EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE T finalizeBoth(const T saccum, const Packet& vaccum) const {
     internal::scalar_sum_op<T> sum_op;
-    internal::scalar_quotient_op<T> quotient_op;
-    return quotient_op(
-        sum_op(saccum, predux(vaccum)),
-        T(scalarCount_ + packetCount_ * unpacket_traits<Packet>::size));
+    return sum_op(saccum, predux(vaccum)) / (scalarCount_ + packetCount_ * unpacket_traits<Packet>::size);
   }
 
   protected:

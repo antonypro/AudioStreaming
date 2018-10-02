@@ -32,6 +32,6 @@ void LevelWidget::paintEvent(QPaintEvent *event)
     QRect currentlevelrect = rect();
     painter.fillRect(currentlevelrect, Qt::black);
     int height = currentlevelrect.height();
-    currentlevelrect.adjust(0, height - m_level * height, 0, 0);
+    currentlevelrect.adjust(0, int(height - m_level * height), 0, 0);
     painter.fillRect(currentlevelrect, Qt::green);
 }

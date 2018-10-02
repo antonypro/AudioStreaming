@@ -9,7 +9,6 @@ SslServer::SslServer(QObject *parent) : QObject(parent)
 
     m_max_connections = 0;
     m_server = nullptr;
-    m_server_p2p = nullptr;
 
     QByteArray password;
 
@@ -26,14 +25,14 @@ SslServer::SslServer(QObject *parent) : QObject(parent)
 
         if (password != confirm_password)
         {
-            password.fill((char)0);
-            confirm_password.fill((char)0);
+            password.fill(char(0));
+            confirm_password.fill(char(0));
 
             DEBUG_FUNCTION("Different passwords!");
             return;
         }
 
-        confirm_password.fill((char)0);
+        confirm_password.fill(char(0));
 
         DEBUG_FUNCTION("Generating certificate...");
 
@@ -74,7 +73,7 @@ SslServer::SslServer(QObject *parent) : QObject(parent)
 
     m_key = QSslKey(&key_file, QSsl::Rsa, QSsl::Pem, QSsl::PrivateKey, password);
 
-    password.fill((char)0);
+    password.fill(char(0));
 
     if (m_key.isNull())
     {
@@ -138,7 +137,7 @@ void SslServer::listen()
     if (!global_settings->contains("maxconnections"))
         global_settings->setValue("maxconnections", 30);
 
-    port = global_settings->value("port").toInt();
+    port = quint16(global_settings->value("port").toInt());
 
     if (port < 1 || port > 65534)
     {
@@ -171,21 +170,11 @@ void SslServer::listen()
         return;
     }
 
-    m_server_p2p = new QTcpServer(this);
-    SETTONULLPTR(m_server_p2p);
+    DEBUG_FUNCTION("Listening on port:" << m_server->serverPort());
 
-    connect(m_server_p2p, &QTcpServer::newConnection, this, &SslServer::newP2P);
-
-    bool listeningp2p = m_server_p2p->listen(QHostAddress::AnyIPv4, port + 1);
-
-    if (!listeningp2p)
-    {
-        DEBUG_FUNCTION("Error:" << qPrintable(m_server_p2p->errorString()));
-        stop();
-        return;
-    }
-
-    DEBUG_FUNCTION("Listening on ports:" << m_server->serverPort() << m_server_p2p->serverPort());
+    QTimer *timer_test = new QTimer(this);
+    connect(timer_test, &QTimer::timeout, this, &SslServer::testConnections);
+    timer_test->start(1000);
 }
 
 void SslServer::stop()
@@ -200,17 +189,6 @@ void SslServer::stop()
 
     m_server->close();
     m_server->deleteLater();
-}
-
-void SslServer::newP2P()
-{
-    while (m_server_p2p->hasPendingConnections())
-    {
-        QTcpSocket *socket = m_server_p2p->nextPendingConnection();
-        connect(socket, &QTcpSocket::disconnected, socket, &QTcpSocket::deleteLater);
-        QTimer::singleShot(60 * 1000, socket, &QTcpSocket::abort);
-        DEBUG_FUNCTION("P2P:" << qPrintable(socket->peerAddress().toString()) << "Port:" <<socket->peerPort());
-    }
 }
 
 void SslServer::newConnectionPrivate(qintptr descriptor)
@@ -236,38 +214,44 @@ void SslServer::newConnectionPrivate(qintptr descriptor)
     QByteArray m_buffer;
     qint32 size = 0;
 
-    QTimer *timer = new QTimer(this);
-    connect(timer, &QTimer::timeout, this, &SslServer::timeout);
-    timer->setSingleShot(true);
-    timer->setInterval(4 * 60 * 60 * 1000 /*4 hours*/);
-
     m_socket_list.append(socket);
     m_descriptor_hash.insert(socket, descriptor);
     m_socket_hash.insert(descriptor, socket);
     m_buffer_hash.insert(socket, m_buffer);
     m_size_hash.insert(socket, size);
-    m_timer_hash.insert(socket, timer);
 
     connect(socket, &QSslSocket::encrypted, this, &SslServer::encrypted);
     connect(socket, &QSslSocket::disconnected, this, &SslServer::disconnectedPrivate);
     connect(socket, static_cast<void(QSslSocket::*)(const QList<QSslError>&)>(&QSslSocket::sslErrors), this, &SslServer::sslErrors);
 
-    timer->start();
+    m_alive_hash[socket].start();
 
     socket->startServerEncryption();
 }
 
-void SslServer::timeout()
+void SslServer::timeout(QSslSocket *socket)
 {
-    QTimer *timer = qobject_cast<QTimer*>(sender());
-
-    QSslSocket *socket = m_timer_hash.key(timer);
-
     QHostAddress host = socket->peerAddress();
 
-    removeSocket(socket);
+    DEBUG_FUNCTION("Timed out:" << qPrintable(QHostAddress(host.toIPv4Address()).toString()));
 
-    DEBUG_FUNCTION("Timed out" << qPrintable(QHostAddress(host.toIPv4Address()).toString()));
+    removeSocket(socket);
+}
+
+void SslServer::testConnections()
+{
+    QList<QSslSocket*> socket_list = m_socket_list;
+
+    for (int i = 0; i < socket_list.size(); i++)
+    {
+        QSslSocket *socket = socket_list[i];
+
+        if (!m_alive_hash.contains(socket))
+            continue;
+
+        if (m_alive_hash[socket].elapsed() > TIMEOUT)
+            timeout(socket);
+    }
 }
 
 void SslServer::sslErrors(QList<QSslError> errors)
@@ -301,9 +285,8 @@ void SslServer::readyReadPrivate()
         return;
 
     QByteArray *m_buffer = &m_buffer_hash[socket];
-    qint32 *size = &m_size_hash[socket];
-    Q_UNUSED(size)
-#define m_size *size
+    qint32 &m_size = m_size_hash[socket];
+
     while (socket->bytesAvailable() > 0)
     {
         m_buffer->append(socket->readAll());
@@ -354,10 +337,9 @@ void SslServer::process(const PeerData &pd)
     {
     case ServerCommand::PeerInfo:
     {
-        QTimer *timer = m_timer_hash[socket];
-        timer->stop();
+        m_alive_hash[socket].restart();
 
-        if (data.size() != 128 + 20 + 64)
+        if (data.size() != 128 + 20 + 64 + 1)
         {
             removeSocket(socket);
             return;
@@ -366,27 +348,48 @@ void SslServer::process(const PeerData &pd)
         QByteArray peer_negotiation_string = data.mid(0, 128);
         QByteArray peer_id = data.mid(128, 20);
         QByteArray password = data.mid(128 + 20, 64);
+        bool new_user = getValue<bool>(data.mid(128 + 20 + 64, 1));
 
         if (peer_negotiation_string != NEGOTIATION_STRING)
         {
-            removeSocket(socket);
+            writeWarning(socket, "Invalid NEGOTIATION STRING!", true);
             return;
         }
 
         if (m_id_list.contains(peer_id))
         {
-            removeSocket(socket);
+            writeWarning(socket, "This user is already connected!", true);
             return;
+        }
+
+        if (new_user)
+        {
+            if (m_sql.userExists(cleanString(QLatin1String(peer_id))))
+            {
+                writeWarning(socket, "User already exists!", true);
+                return;
+            }
+            else if (!m_sql.createUser(cleanString(QLatin1String(peer_id)), cleanString(QLatin1String(password))))
+            {
+                writeWarning(socket, "Can't create new user!", true);
+                return;
+            }
         }
 
         if (!m_sql.loginUser(cleanString(QLatin1String(peer_id)), cleanString(QLatin1String(password))))
         {
-            removeSocket(socket);
+            writeWarning(socket, "Can't login with this user and password!", true);
             return;
         }
 
         m_id_list.append(peer_id);
         m_id_hash.insert(socket, peer_id);
+
+        QByteArray data;
+        data.append(getBytes<quint8>(ServerCommand::LoggedIn));
+
+        socket->write(getBytes<qint32>(data.size()));
+        socket->write(data);
 
         break;
     }
@@ -400,26 +403,35 @@ void SslServer::process(const PeerData &pd)
 
         QByteArray peer_id = data;
 
-        peer_id = cleanString(QLatin1String(peer_id)).toLatin1().leftJustified(peer_id.length(), (char)0, true);
+        peer_id = cleanString(QLatin1String(peer_id)).toLatin1().leftJustified(peer_id.length(), char(0), true);
 
         if (peer_id == m_id_hash[socket])
         {
-            removeSocket(socket);
+            writeWarning(socket, "You're trying to connect to itself!");
             return;
         }
 
         if (!m_id_list.contains(peer_id))
         {
-            removeSocket(socket);
+            writeWarning(socket, "You're trying to connect to a non connected user!");
             return;
         }
+
+        QSslSocket *target_socket = m_id_hash.key(peer_id);
+
+        if (m_connecting_connected_list.contains(target_socket))
+        {
+            writeWarning(socket, "User already connected!");
+            return;
+        }
+
+        m_connecting_connected_list.append(socket);
+        m_connecting_connected_list.append(target_socket);
 
         QByteArray data;
         data.append(getBytes<quint8>(ServerCommand::ConnectionRequested));
         data.append(getBytes<quint32>(socket->localAddress().toIPv4Address()));
         data.append(m_id_hash[socket]);
-
-        QSslSocket *target_socket = m_id_hash.key(peer_id);
 
         m_accept_hash.insert(target_socket, socket);
 
@@ -438,39 +450,52 @@ void SslServer::process(const PeerData &pd)
 
         QSslSocket *socket_starter = m_accept_hash[socket];
 
+        bool accepted = getValue<bool>(data.mid(0, 1));
+
         if (!socket_starter)
         {
-            removeSocket(socket);
+            m_connecting_connected_list.removeAll(socket_starter);
+            m_connecting_connected_list.removeAll(socket);
+
+            if (accepted)
+                writeWarning(socket, "Can't connect to user because it's disconnected or canceled operation!");
+
             return;
         }
 
-        bool accepted = getValue<bool>(data.mid(0, 1));
-
         if (!accepted)
         {
-            removeSocket(socket_starter);
+            QSslSocket *socket1 = socket_starter;
+            QSslSocket *socket2 = socket;
+
+            m_accept_hash.remove(socket1);
+            m_accept_hash.remove(socket2);
+
+            m_connecting_connected_list.removeAll(socket1);
+            m_connecting_connected_list.removeAll(socket2);
+
+            writeWarning(socket_starter, "User refused connection!");
+
             return;
         }
 
         QSslSocket *socket1 = socket;
         QSslSocket *socket2 = socket_starter;
 
-        quint32 ip1 = socket1->peerAddress().toIPv4Address();
-        quint32 ip2 = socket2->peerAddress().toIPv4Address();
+        m_connected_1.insert(socket1, socket2);
+        m_connected_2.insert(socket2, socket1);
 
         QByteArray data1;
         QByteArray data2;
 
-        data1.append(getBytes<quint8>(ServerCommand::ConnectionInfo));
-        data2.append(getBytes<quint8>(ServerCommand::ConnectionInfo));
+        data1.append(getBytes<quint8>(ServerCommand::ConnectedToPeer));
+        data2.append(getBytes<quint8>(ServerCommand::ConnectedToPeer));
 
         QByteArray password = OpenSslLib::RANDbytes(32);
 
-        data1.append(getBytes<quint32>(ip1));
         data1.append(m_id_hash[socket1]);
         data1.append(password);
 
-        data2.append(getBytes<quint32>(ip2));
         data2.append(m_id_hash[socket2]);
         data2.append(password);
 
@@ -482,45 +507,36 @@ void SslServer::process(const PeerData &pd)
 
         break;
     }
-    case ServerCommand::Port:
+    case ServerCommand::DisconnectedFromPeer:
     {
-        if (data.size() != 2)
-        {
-            removeSocket(socket);
-            return;
-        }
+        disconnectedFromPeer(socket);
 
-        if (!m_port_hash.contains(socket))
-            m_port_hash.insert(socket, data);
-
-        QSslSocket *target_socket = m_accept_hash.value(socket);
+        break;
+    }
+    case ServerCommand::P2PData:
+    {
+        QSslSocket *target_socket = m_connected_1.value(socket);
 
         if (!target_socket)
-            target_socket = m_accept_hash.key(socket);
+            target_socket = m_connected_2.value(socket);
 
         if (!target_socket)
-            return;
+            break;
 
-        QSslSocket *socket1 = socket;
-        QSslSocket *socket2 = target_socket;
+        data.prepend(getBytes<quint8>(ServerCommand::P2PData));
 
-        QByteArray data_port_1 = m_port_hash.value(socket1);
-        QByteArray data_port_2 = m_port_hash.value(socket2);
+        target_socket->write(getBytes<qint32>(data.size()));
+        target_socket->write(data);
 
-        if (data_port_1.size() != 2 || data_port_2.size() != 2)
-            return;
+        m_alive_hash[socket].restart();
 
-        data_port_1.prepend(getBytes<quint8>(ServerCommand::Port));
-        data_port_2.prepend(getBytes<quint8>(ServerCommand::Port));
+        m_alive_hash[target_socket].restart();
 
-        socket1->write(getBytes<qint32>(data_port_2.size()));
-        socket1->write(data_port_2);
-
-        socket2->write(getBytes<qint32>(data_port_1.size()));
-        socket2->write(data_port_1);
-
-        m_port_hash.remove(socket1);
-        m_port_hash.remove(socket2);
+        break;
+    }
+    case ServerCommand::Alive:
+    {
+        m_alive_hash[socket].restart();
 
         break;
     }
@@ -551,18 +567,17 @@ void SslServer::removeSocket(QSslSocket *socket)
 
     QHostAddress host = socket->peerAddress();
 
+    disconnectedFromPeer(socket);
+
     m_socket_hash.remove(descriptor);
     m_descriptor_hash.remove(socket);
     m_buffer_hash.remove(socket);
     m_size_hash.remove(socket);
-    m_timer_hash[socket]->deleteLater();
-    m_timer_hash.remove(socket);
-    m_accept_hash.remove(m_accept_hash.key(socket));
-    m_port_hash.remove(socket);
 
     m_socket_list.removeAll(socket);
     m_id_list.removeAll(m_id_hash[socket]);
     m_id_hash.remove(socket);
+    m_alive_hash.remove(socket);
 
     socket->blockSignals(true);
     socket->abort();
@@ -572,4 +587,56 @@ void SslServer::removeSocket(QSslSocket *socket)
     m_max_connections++;
 
     DEBUG_FUNCTION("Disconnected:" << qPrintable(QHostAddress(host.toIPv4Address()).toString()));
+}
+
+void SslServer::writeWarning(QSslSocket *socket, const QString &message, bool remove_socket)
+{
+    QByteArray data;
+    data.append(getBytes<quint8>(ServerCommand::Warning));
+    data.append(message.toLatin1());
+
+    socket->write(getBytes<qint32>(data.size()));
+    socket->write(data);
+
+    if (remove_socket)
+    {
+        QTimer::singleShot(0, [=]{removeSocket(socket);});
+    }
+}
+
+void SslServer::disconnectedFromPeer(QSslSocket *socket)
+{
+    QSslSocket *target_socket = m_accept_hash.value(socket);
+
+    if (!target_socket)
+        target_socket = m_accept_hash.key(socket);
+
+    QSslSocket *socket1 = socket;
+    QSslSocket *socket2 = target_socket;
+
+    m_connected_1.remove(socket1);
+    m_connected_1.remove(socket2);
+    m_connected_2.remove(socket1);
+    m_connected_2.remove(socket2);
+
+    m_accept_hash.remove(socket1);
+    m_accept_hash.remove(socket2);
+
+    m_connecting_connected_list.removeAll(socket1);
+    m_connecting_connected_list.removeAll(socket2);
+
+    QByteArray data1;
+    data1.append(getBytes<quint8>(ServerCommand::DisconnectedFromPeer));
+
+    if (socket1)
+    {
+        socket1->write(getBytes<qint32>(data1.size()));
+        socket1->write(data1);
+    }
+
+    if (socket2)
+    {
+        socket2->write(getBytes<qint32>(data1.size()));
+        socket2->write(data1);
+    }
 }

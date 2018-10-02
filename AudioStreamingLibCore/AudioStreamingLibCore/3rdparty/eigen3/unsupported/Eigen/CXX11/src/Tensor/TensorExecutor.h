@@ -201,7 +201,7 @@ class TensorExecutor<Expression, GpuDevice, Vectorizable> {
 };
 
 
-#if defined(EIGEN_CUDACC)
+#if defined(__CUDACC__)
 template <typename Evaluator, typename Index, bool Vectorizable>
 struct EigenMetaKernelEval {
   static __device__ EIGEN_ALWAYS_INLINE
@@ -264,7 +264,7 @@ inline void TensorExecutor<Expression, GpuDevice, Vectorizable>::run(
   evaluator.cleanup();
 }
 
-#endif  // EIGEN_CUDACC
+#endif  // __CUDACC__
 #endif  // EIGEN_USE_GPU
 
 // SYCL Executor policy

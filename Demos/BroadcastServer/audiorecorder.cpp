@@ -75,7 +75,7 @@ void AudioRecorder::writeHeader()
 void AudioRecorder::close()
 {
     // Fill the header size placeholders
-    quint32 fileSize = size();
+    quint32 fileSize = quint32(size());
 
     QDataStream out(this);
     // Set the same ByteOrder like in writeHeader()

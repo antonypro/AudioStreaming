@@ -32,7 +32,6 @@ struct traits<TensorEvalToOp<XprType, MakePointer_> >
   typedef typename remove_reference<Nested>::type _Nested;
   static const int NumDimensions = XprTraits::NumDimensions;
   static const int Layout = XprTraits::Layout;
-  typedef typename MakePointer_<Scalar>::Type PointerType;
 
   enum {
     Flags = 0
@@ -42,9 +41,6 @@ struct traits<TensorEvalToOp<XprType, MakePointer_> >
     // Intermediate typedef to workaround MSVC issue.
     typedef MakePointer_<T> MakePointerT;
     typedef typename MakePointerT::Type Type;
-    typedef typename MakePointerT::RefType RefType;
-
-
   };
 };
 
@@ -121,7 +117,7 @@ struct TensorEvaluator<const TensorEvalToOp<ArgType, MakePointer_>, Device>
   EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE const XprType& op() const {
     return m_op;
   }
-
+  
   EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE ~TensorEvaluator() {
   }
 

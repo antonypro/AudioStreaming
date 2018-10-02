@@ -67,25 +67,25 @@ template<typename ExpressionType> class NestByValue
     }
 
     template<int LoadMode>
-    EIGEN_DEVICE_FUNC inline const PacketScalar packet(Index row, Index col) const
+    inline const PacketScalar packet(Index row, Index col) const
     {
       return m_expression.template packet<LoadMode>(row, col);
     }
 
     template<int LoadMode>
-    EIGEN_DEVICE_FUNC inline void writePacket(Index row, Index col, const PacketScalar& x)
+    inline void writePacket(Index row, Index col, const PacketScalar& x)
     {
       m_expression.const_cast_derived().template writePacket<LoadMode>(row, col, x);
     }
 
     template<int LoadMode>
-    EIGEN_DEVICE_FUNC inline const PacketScalar packet(Index index) const
+    inline const PacketScalar packet(Index index) const
     {
       return m_expression.template packet<LoadMode>(index);
     }
 
     template<int LoadMode>
-    EIGEN_DEVICE_FUNC inline void writePacket(Index index, const PacketScalar& x)
+    inline void writePacket(Index index, const PacketScalar& x)
     {
       m_expression.const_cast_derived().template writePacket<LoadMode>(index, x);
     }
@@ -99,7 +99,7 @@ template<typename ExpressionType> class NestByValue
 /** \returns an expression of the temporary version of *this.
   */
 template<typename Derived>
-EIGEN_DEVICE_FUNC inline const NestByValue<Derived>
+inline const NestByValue<Derived>
 DenseBase<Derived>::nestByValue() const
 {
   return NestByValue<Derived>(derived());

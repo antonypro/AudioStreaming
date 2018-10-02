@@ -14,6 +14,8 @@ OpusEncoderClass::~OpusEncoderClass()
     if (!m_initialized)
         return;
 
+    m_initialized = false;
+
     /*Destroy the encoder state*/
     opus_encoder_destroy(m_encoder);
 }
@@ -27,7 +29,7 @@ void OpusEncoderClass::startPrivate(int sample_rate, int channels, int bitrate, 
 
     /*Create a new encoder state */
     m_encoder = opus_encoder_create(sample_rate, channels, application, &err);
-    if (err<0)
+    if (err < 0)
     {
         emit error(QString("Failed to create an Opus encoder: %0").arg(opus_strerror(err)));
         return;
@@ -40,7 +42,7 @@ void OpusEncoderClass::startPrivate(int sample_rate, int channels, int bitrate, 
           parameters you know you need. Doing otherwise is likely to result
           in worse quality, but better. */
     err = opus_encoder_ctl(m_encoder, OPUS_SET_BITRATE(bitrate));
-    if (err<0)
+    if (err < 0)
     {
         emit error(QString("Failed to set Opus bitrate: %0").arg(opus_strerror(err)));
         return;
@@ -64,10 +66,15 @@ void OpusEncoderClass::writePrivate(const QByteArray &data)
 {
     m_buffer.append(data);
 
-    QByteArray result;
+    forever
+    {
+        QByteArray result = encode();
 
-    while ((result = encode()) != QByteArray())
+        if (result.isEmpty())
+            break;
+
         emit encoded(result);
+    }
 }
 
 void OpusEncoderClass::write(const QByteArray &data)
@@ -81,7 +88,7 @@ QByteArray OpusEncoderClass::encode()
     if (!m_initialized)
         return QByteArray();
 
-    int size = sizeof(float) * m_channels * m_frame_size;
+    int size = int(sizeof(float)) * m_channels * m_frame_size;
 
     if (m_buffer.size() < size)
         return QByteArray();
@@ -91,10 +98,10 @@ QByteArray OpusEncoderClass::encode()
     QByteArray input = m_buffer.mid(0, size);
     m_buffer.remove(0, size);
 
-    QByteArray output = QByteArray(MAX_PACKET_SIZE, (char)0);
+    QByteArray output = QByteArray(MAX_PACKET_SIZE, char(0));
 
     /* Encode the frame. */
-    nbBytes = opus_encode_float(m_encoder, (const float*)input.constData(), m_frame_size, (uchar*)output.data(), MAX_PACKET_SIZE);
+    nbBytes = opus_encode_float(m_encoder, reinterpret_cast<const float*>(input.constData()), m_frame_size, reinterpret_cast<uchar*>(output.data()), MAX_PACKET_SIZE);
 
     if (nbBytes < 0)
     {

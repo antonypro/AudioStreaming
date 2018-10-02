@@ -2,14 +2,15 @@
 
 #define TITLE "Broadcast Server Demo"
 
-QPlainTextEdit *debug_edit = nullptr;
+static QPlainTextEdit *debug_edit = nullptr;
 
 void messageHandler(QtMsgType type, const QMessageLogContext &context, const QString &msg)
 {
     Q_UNUSED(type)
     Q_UNUSED(context)
 
-    QMetaObject::invokeMethod(debug_edit, "appendPlainText", Q_ARG(QString, msg));
+    if (debug_edit)
+        QMetaObject::invokeMethod(debug_edit, "appendPlainText", Q_ARG(QString, msg));
 }
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
@@ -123,6 +124,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     layout_record->addWidget(boxautostart, 2, 0, 1, 5);
 
     texteditlog = new QPlainTextEdit(this);
+    texteditlog->setMaximumBlockCount(10000);
     debug_edit = texteditlog;
 
     tabwidget->addTab(areasettings," Settings");
@@ -165,7 +167,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 
 MainWindow::~MainWindow()
 {
-    qInstallMessageHandler(0);
+    debug_edit = nullptr;
 }
 
 void MainWindow::start()
@@ -188,7 +190,7 @@ void MainWindow::start()
 
     if (comboboxaudioinput->count() == 0)
     {
-        QMessageBox::critical(this, "Error", "No input device found");
+        msgBoxCritical("Error", "No input device found", this);
         return;
     }
 
@@ -197,8 +199,9 @@ void MainWindow::start()
 
     if (!ok || port < 1 || port > 65535)
     {
-        QMessageBox::critical(this, "Error", "Port must have a value between 1 and 65535,\n"
-                                             "including these values");
+        msgBoxCritical("Error", "Port must have a value between 1 and 65535,\n"
+                                "including these values", this);
+
         return;
     }
 
@@ -206,7 +209,7 @@ void MainWindow::start()
 
     if (!ok || max_connections < 1)
     {
-        QMessageBox::critical(this, "Error", "Enter a value equal or higher to 1 on maximum connections");
+        msgBoxCritical("Error", "Enter a value equal or higher to 1 on maximum connections", this);
         return;
     }
 
@@ -291,7 +294,7 @@ void MainWindow::start()
 
     m_audio_lib->start(info);
 
-    m_audio_lib->listen(port, true, password, max_connections);
+    m_audio_lib->listen(quint16(port), true, password, max_connections);
 
     boxautostart->setEnabled(false);
 
@@ -423,7 +426,9 @@ void MainWindow::startPauseRecord()
             if (!m_audio_recorder->open())
             {
                 stopRecord();
-                QMessageBox::critical(this, "Error", "Error openning file for record!");
+
+                msgBoxCritical("Error", "Error openning file for record!", this);
+
                 return;
             }
         }
@@ -480,7 +485,7 @@ void MainWindow::writeToFile(const QByteArray &data)
 {
     m_audio_recorder->write(AudioStreamingLibCore::convertFloatToInt16(data));
 
-    qint64 recorded = AudioStreamingLibCore::sizeToTime(m_audio_recorder->size() - 44, m_format);
+    int recorded = int(AudioStreamingLibCore::sizeToTime(m_audio_recorder->size() - 44, m_format));
 
     QTime time = QTime(0, 0, 0).addMSecs(recorded);
 
@@ -504,7 +509,7 @@ void MainWindow::updateConnections()
 void MainWindow::error(const QString &error)
 {
     if (!error.isEmpty())
-        QMessageBox::critical(this, "Error", error);
+        msgBoxCritical("Error", error, this);
 }
 
 void MainWindow::finished()
@@ -575,7 +580,7 @@ void MainWindow::getDevInfo()
         comboboxaudioinput->addItem(inputdevices.at(i).deviceName(), qVariantFromValue(inputdevices.at(i)));
 
     if (comboboxaudioinput->count() == 0)
-        QMessageBox::warning(this, "Error", "No input device found!");
+        msgBoxWarning("Error", "No input device found!", this);
 
     currentIndexChanged(comboboxaudioinput->currentIndex());
 

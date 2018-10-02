@@ -7,6 +7,8 @@
 
 LevelMeter::LevelMeter(QObject *parent) : QObject(parent)
 {
+    m_timer = nullptr;
+
     START_THREAD
 }
 
@@ -16,12 +18,16 @@ void LevelMeter::startPrivate(const QAudioFormat &format)
 
     m_format = format;
 
-    m_size = 0;
+    m_buffer.clear();
 
-    QTimer *timer = new QTimer(this);
-    timer->setTimerType(Qt::PreciseTimer);
-    connect(timer, &QTimer::timeout, this, &LevelMeter::currentlevelPrivate);
-    timer->start(INTERVAL);
+    if (!m_timer)
+    {
+        m_timer = new QTimer(this);
+        SETTONULLPTR(m_timer);
+        m_timer->setTimerType(Qt::PreciseTimer);
+        connect(m_timer, &QTimer::timeout, this, &LevelMeter::currentlevelPrivate);
+        m_timer->start(INTERVAL);
+    }
 }
 
 void LevelMeter::start(const QAudioFormat &format)
@@ -56,7 +62,7 @@ void LevelMeter::process()
     if (middle.isEmpty())
         return;
 
-    Eigen::Ref<Eigen::VectorXf> samples = Eigen::Map<Eigen::VectorXf>((float*)middle.data(), middle.size() / sizeof(float));
+    Eigen::Ref<Eigen::VectorXf> samples = Eigen::Map<Eigen::VectorXf>(reinterpret_cast<float*>(middle.data()), middle.size() / int(sizeof(float)));
 
     m_level = samples.maxCoeff();
 }

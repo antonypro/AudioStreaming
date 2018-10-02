@@ -28,7 +28,7 @@ void SslClient::connectToHost(const QString &host, quint16 port)
     connect(m_socket, static_cast<void(QSslSocket::*)(const QList<QSslError>&)>(&QSslSocket::sslErrors), this, &SslClient::sslErrors);
     connect(m_socket, static_cast<void(QSslSocket::*)(QSslSocket::SocketError)>(&QSslSocket::error), this, &SslClient::errorPrivate);
 
-    m_timer->start(10 * 1000);
+    m_timer->start(TIMEOUT);
 
     m_socket->setProtocol(QSsl::TlsV1_2OrLater);
 
@@ -113,6 +113,14 @@ void SslClient::stop()
     m_buffer.clear();
 }
 
+void SslClient::disconnectFromPeer()
+{
+    QByteArray data;
+    data.append(getBytes<quint8>(ServerCommand::DisconnectedFromPeer));
+
+    write(data);
+}
+
 int SslClient::write(const QByteArray &data)
 {
     if (!m_socket)
@@ -172,42 +180,55 @@ void SslClient::processInput(const QByteArray &peer_data)
 
         break;
     }
-    case ServerCommand::ConnectionInfo:
+    case ServerCommand::LoggedIn:
     {
-        if (data.size() != 4 + 20 + 32)
-        {
-            m_socket->abort();
-            return;
-        }
+        QTimer *timer = new QTimer(this);
+        connect(timer, &QTimer::timeout, this, &SslClient::alive);
+        timer->start(5000);
 
-        quint32 ip = getValue<quint32>(data.mid(0, 4));
-        data.remove(0, 4);
-
-        QByteArray id = data.mid(0, 20);
-        data.remove(0, 20);
-
-        QByteArray password = data.mid(0, 32);
-        data.remove(0, 32);
-
-        emit connectionInfo(ip, id, password);
+        emit webClientLoggedIn();
 
         break;
     }
-    case ServerCommand::Port:
+    case ServerCommand::ConnectedToPeer:
     {
-        if (data.size() != 2)
+        if (data.size() != 20 + 32)
         {
-            m_socket->abort();
-            return;
+            disconnectFromPeer();
+            break;
         }
 
-        quint16 port = getValue<quint16>(data);
+        emit connectedToPeer(data.mid(0, 20), data.mid(20, 32));
 
-        emit remotePort(port);
+        break;
+    }
+    case ServerCommand::DisconnectedFromPeer:
+    {
+        emit disconnectedFromPeer();
+
+        break;
+    }
+    case ServerCommand::P2PData:
+    {
+        emit P2PData(data);
+
+        break;
+    }
+    case ServerCommand::Warning:
+    {
+        emit webClientWarning(QLatin1String(data));
 
         break;
     }
     default:
         break;
     }
+}
+
+void SslClient::alive()
+{
+    QByteArray result;
+    result.append(getBytes<quint8>(ServerCommand::Alive));
+
+    write(result);
 }

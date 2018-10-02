@@ -18,8 +18,10 @@ public slots:
     void connectToHost(const QString &host, quint16 port,
                        const QByteArray &negotiation_string,
                        const QString &id,
-                       const QByteArray &password);
+                       const QByteArray &password,
+                       bool new_user);
     void connectToPeer(const QString &peer_id);
+    void disconnectFromPeer();
     void stop();
     int write(const QByteArray &data);
     void acceptConnection();
@@ -31,39 +33,19 @@ private slots:
     void connectedToServerPrivate(const QByteArray &hash);
     void disconnectedFromServer();
     void pendingPrivate(quint32 host, const QByteArray &id);
-    void connectToP2PServer(quint32 ip, const QByteArray &id, const QByteArray &password);
-    void startP2PConnection();
-    void readyToGetPort();
-    void remotePort(quint16 port);
-    void readyToConnectToPeer();
-    void attemptToConnect();
-    void connectP2P();
-    void confirmP2PConnection();
-    void confirmedP2PConnection();
-    void connectedP2P();
-    void disconnectedPrivate();
-    void errorPrivate(QAbstractSocket::SocketError e);
-    void readyReadPrivate();
-    void timeout();
+    void connectedToPeerPrivate(const QByteArray &id, const QByteArray &password);
+    void disconnectedFromPeerPrivate();
+    void readyReadPrivate(const QByteArray &data);
 
 private:
-    int m_i;
     qintptr m_descriptor;
-    quint16 m_local_port;
     bool m_ssl_certificate_accepted;
-    QTcpSocket *m_socket;
     OpenSslLib *m_openssl;
     SslClient *m_ssl_client;
-    QByteArray m_buffer;
-    qint32 m_size;
-    QTimer *m_timer;
     QByteArray m_negotiation_string;
     QString m_id;
     QByteArray m_password;
-    QString m_host;
-    quint16 m_host_port;
-    quint32 m_peer_ip;
-    quint16 m_peer_port;
+    bool m_new_user;
     QByteArray m_peer_id;
 };
 

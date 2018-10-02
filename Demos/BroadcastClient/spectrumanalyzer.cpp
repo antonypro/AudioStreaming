@@ -3,7 +3,7 @@
 SpectrumAnalyzer::SpectrumAnalyzer(QObject *parent) : QObject(parent)
 {
     m_initialized = false;
-    m_fft = NULL;
+    m_fft = nullptr;
 }
 
 SpectrumAnalyzer::~SpectrumAnalyzer()
@@ -23,14 +23,14 @@ void SpectrumAnalyzer::start(const QAudioFormat &format)
 
     m_format = format;
 
-    m_fft = kiss_fft_alloc(numSamples, 0, 0, 0);
+    m_fft = kiss_fft_alloc(numSamples, 0, nullptr, nullptr);
     m_spectrum.resize(numSamples);
     m_window.resize(numSamples);
 
     // Initialize window
     for (int i = 0; i < numSamples; i++)
     {
-        float window = 0.5 * (1 - qCos((2 * M_PI * i) / (numSamples - 1)));
+        float window = 0.5f * float(1 - qCos((2 * M_PI * i) / (numSamples - 1)));
         m_window[i] = window;
     }
 }
@@ -42,13 +42,13 @@ void SpectrumAnalyzer::calculateSpectrum(const QByteArray &data)
 
     m_spectrum_buffer.append(data);
 
-    while (m_spectrum_buffer.size() >= (int)(numSamples * sizeof(float)))
+    while (m_spectrum_buffer.size() >= int(numSamples * sizeof(float)))
     {
         QByteArray middle = m_spectrum_buffer.mid(0, numSamples * sizeof(float));
         int len = middle.size();
         m_spectrum_buffer.remove(0, len);
 
-        const float *samples = (const float*)middle.constData();
+        const float *samples = reinterpret_cast<const float*>(middle.constData());
 
         kiss_fft_cpx inbuf[numSamples];
         kiss_fft_cpx outbuf[numSamples];
@@ -83,11 +83,11 @@ void SpectrumAnalyzer::calculateSpectrum(const QByteArray &data)
                 imag = cpx.r;
             }
 
-            const float magnitude = qSqrt(real * real + imag * imag);
-            float amplitude = SpectrumAnalyserMultiplier * qLn(magnitude);
+            const float magnitude = float(qSqrt(qreal(real * real + imag * imag)));
+            float amplitude = SpectrumAnalyserMultiplier * float(qLn(qreal(magnitude)));
 
             // Bound amplitude to [0, 1]
-            amplitude = qBound((float)0, amplitude, (float)1);
+            amplitude = qBound(float(0), amplitude, float(1));
             m_spectrum[i].amplitude = amplitude;
         }
 

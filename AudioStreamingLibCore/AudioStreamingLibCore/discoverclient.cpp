@@ -13,7 +13,7 @@ void DiscoverClient::discover(quint16 port, const QByteArray &negotiation_string
 
     m_port = port;
 
-    m_negotiation_string = negotiation_string.leftJustified(128, (char)0, true);
+    m_negotiation_string = negotiation_string.leftJustified(128, char(0), true);
 
     connect(m_socket, &QUdpSocket::readyRead, this, &DiscoverClient::readyRead);
 
@@ -43,7 +43,7 @@ void DiscoverClient::readyRead()
     while (m_socket->hasPendingDatagrams())
     {
         QByteArray data;
-        data.resize(m_socket->pendingDatagramSize());
+        data.resize(int(m_socket->pendingDatagramSize()));
 
         QHostAddress host;
         quint16 port;

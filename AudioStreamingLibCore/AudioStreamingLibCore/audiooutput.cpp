@@ -2,18 +2,30 @@
 
 AudioOutput::AudioOutput(QObject *parent) : QObject(parent)
 {
-    m_initialized = false;
     m_audio_output = nullptr;
-    m_is_get_very_output_enabled = false;
     m_device = nullptr;
+    m_level_meter = nullptr;
+
+    m_initialized = false;
+    m_is_get_very_output_enabled = false;
     m_buffer_requested = true;
     m_play_called = false;
-    m_volume = 0;
     m_sample_align = 0;
     m_size_to_buffer = 0;
     m_time_to_buffer = 0;
+    m_last_size_to_buffer = 0;
     m_max_size_to_buffer = 0;
-    m_level_meter = nullptr;
+
+#ifdef IS_TO_DEBUG
+    m_index = -1;
+#endif
+
+    //Smart buffer
+    m_smart_buffer_enabled = false;
+    m_smart_buffer_test_active = false;
+    m_bytes = 0;
+    m_smart_bufer_min_size = 0;
+    m_bytes_read = 0;
 
     START_THREAD
 }
@@ -50,7 +62,7 @@ void AudioOutput::startPrivate(const QAudioDeviceInfo &devinfo,
         }
     }
 
-    LIB_DEBUG_LEVEL_1("Output format used by device:" << m_supported_format);
+    LIB_DEBUG_LEVEL_2("Output format used by device:" << m_supported_format);
 
     int internal_buffer_size;
 
@@ -68,14 +80,14 @@ void AudioOutput::startPrivate(const QAudioDeviceInfo &devinfo,
     m_audio_output->setBufferSize(internal_buffer_size);
 
     //Factor to compensate differents sample sizes
-    m_sample_align = m_supported_format.sampleSize() / (float)m_format.sampleSize();
+    m_sample_align = m_supported_format.sampleSize() / float(m_format.sampleSize());
 
     m_time_to_buffer = time_to_buffer;
     //Compute the size in bytes to be buffered based on the current format
-    m_size_to_buffer = timeToSize(m_time_to_buffer, m_format);
+    m_size_to_buffer = int(timeToSize(m_time_to_buffer, m_format));
     //Define a highest size that the buffer are allowed to have in the given time
     //This value is used to discard too old buffered data
-    m_max_size_to_buffer = m_size_to_buffer + timeToSize(MAX_BUFFERED_TIME, m_format);
+    m_max_size_to_buffer = m_size_to_buffer + int(timeToSize(MAX_BUFFERED_TIME, m_format));
 
     m_device = m_audio_output->start();
 
@@ -83,6 +95,14 @@ void AudioOutput::startPrivate(const QAudioDeviceInfo &devinfo,
     {
         emit error("Failed to open output audio device");
         return;
+    }
+
+    if (m_time_to_buffer == 0)
+    {
+        m_smart_buffer_enabled = true;
+        m_smart_buffer_timer.start();
+
+        m_smart_buffer_test_active = true;
     }
 
     //Timer that helps to keep playing data while it's available on the internal buffer
@@ -98,8 +118,7 @@ void AudioOutput::startPrivate(const QAudioDeviceInfo &devinfo,
 
     m_is_get_very_output_enabled = is_get_very_output_enabled;
 
-    m_level_meter = new LevelMeter();
-    connect(this, &AudioOutput::destroyed, m_level_meter, &LevelMeter::deleteLater);
+    m_level_meter = new LevelMeter(this);
 
     m_level_meter->start(m_format);
 
@@ -122,12 +141,12 @@ void AudioOutput::start(const QAudioDeviceInfo &devinfo,
 
 void AudioOutput::setVolumePrivate(int volume)
 {
-    float volumeLevelLinear = (float)0.5; //cut amplitude in half
-    float volumeLevelDb = 10 * (qLn(volumeLevelLinear) / qLn(10));
-    float volumeLinear = (volume / (float)100);
-    m_volume = volumeLinear * qPow(10, (volumeLevelDb / (float)20));
+    float volumeLevelLinear = float(0.5); //cut amplitude in half
+    float volumeLevelDb = float(10 * (qLn(double(volumeLevelLinear)) / qLn(10)));
+    float volumeLinear = (volume / float(100));
+    m_volume = volumeLinear * float(qPow(10, (qreal(volumeLevelDb)) / 20));
 
-    LIB_DEBUG_LEVEL_1("Volume:" << m_volume);
+    LIB_DEBUG_LEVEL_2("Volume:" << m_volume);
 }
 
 void AudioOutput::setVolume(int volume)
@@ -143,20 +162,77 @@ void AudioOutput::verifyBuffer()
 
 void AudioOutput::writePrivate(const QByteArray &data)
 {
+    if (!m_initialized)
+        return;
+
+    if (m_smart_buffer_test_active)
+    {
+        m_bytes_read += data.size();
+
+        //Test of environment finished
+        if (m_bytes_read >= timeToSize(MAX_BUFFERED_TIME, m_format))
+        {
+            m_bytes_read = 0; //Reset it
+            m_smart_buffer_test_active = false;
+        }
+    }
+
+    if (m_smart_buffer_enabled && !m_smart_buffer_test_active)
+    {
+        if (m_smart_buffer_timer.elapsed() >= 500)
+        {
+            int time_elapsed = int(m_smart_buffer_timer.restart());
+
+            int speed = qCeil(m_bytes * qreal(500) / time_elapsed); //Nearly bytes per time
+
+            int desired_speed = (int(timeToSize(500, m_format)) * 75 / 100); //75%
+
+            if (speed < desired_speed)
+            {
+                if (m_time_to_buffer + 100 <= MAX_BUFFERED_TIME)
+                {
+                    m_time_to_buffer += 100;
+                    m_size_to_buffer = int(timeToSize(m_time_to_buffer, m_format));
+                    m_size_to_buffer = qMax(m_smart_bufer_min_size, m_size_to_buffer);
+
+                    LIB_DEBUG_LEVEL_1("Speed:" << qRound(speed / float(1024)) << "KB/S" << "-"
+                                      << "Desired:" << qRound(desired_speed / float(1024)) << "KB/S" << "-"
+                                      << "Buffer adjusted:" << m_time_to_buffer << "ms");
+                }
+            }
+            else
+            {
+                if (m_time_to_buffer > 0)
+                {
+                    m_time_to_buffer = 0;
+                    m_size_to_buffer = int(timeToSize(m_time_to_buffer, m_format));
+                    m_size_to_buffer = qMax(m_smart_bufer_min_size, m_size_to_buffer);
+
+                    m_buffer.clear();
+
+                    LIB_DEBUG_LEVEL_1("Speed:" << qRound(speed / float(1024)) << "KB/S" << "-"
+                                      << "Desired:" << qRound(desired_speed / float(1024)) << "KB/S" << "-"
+                                      << "Buffer adjusted:" << m_time_to_buffer << "ms");
+                }
+            }
+
+            m_bytes = 0;
+        }
+    }
+
+    m_bytes += data.size();
+
     m_buffer.append(data);
 
 #ifdef IS_TO_DEBUG
+#ifdef IS_TO_DEBUG_VERBOSE_1
     if (m_buffer_requested)
+#endif
     {
         if (m_time_to_buffer > 0)
         {
-            LIB_DEBUG_LEVEL_1("Buffering:"
-                      << qPrintable(QString("%0\\%1 ms - %2%").arg(sizeToTime(m_buffer.size(), m_format)).arg(m_time_to_buffer)
-                                    .arg(m_buffer.size() * 100 / m_size_to_buffer)));
-        }
-        else
-        {
-            LIB_DEBUG_LEVEL_1("Not buffered data got:" << sizeToTime(m_buffer.size(), m_format) << "ms");
+            LIB_DEBUG_LEVEL_1("Buffering:" << qPrintable(QString("%0\\%1 ms - %2%").arg(sizeToTime(m_buffer.size(), m_format)).arg(m_time_to_buffer)
+                                                         .arg(m_buffer.size() * 100 / m_size_to_buffer)));
         }
     }
 #endif
@@ -185,8 +261,19 @@ void AudioOutput::preplay()
 
 void AudioOutput::play()
 {
+    if (!m_initialized)
+        return;
+
     //Set that last async call was triggered
     m_play_called = false;
+
+    if (m_last_size_to_buffer != m_size_to_buffer)
+    {
+        if (m_buffer.size() < m_size_to_buffer)
+            return;
+
+        m_last_size_to_buffer = m_size_to_buffer;
+    }
 
     if (m_buffer.isEmpty())
     {
@@ -205,10 +292,19 @@ void AudioOutput::play()
     }
     else
     {
-        if (m_buffer_requested)
+#ifdef IS_TO_DEBUG
+        record_mutex.lock();
+
+        qint64 index = record_count;
+
+        record_mutex.unlock();
+
+        if (m_index != index)
         {
+            m_index = index + 1;
             LIB_DEBUG_LEVEL_1("Playing...");
         }
+#endif
 
         //Buffer is ready and data can be played
         m_buffer_requested = false;
@@ -221,6 +317,25 @@ void AudioOutput::play()
     int aligned_len = qRound(readlen / m_sample_align);
 
     LIB_DEBUG_LEVEL_2("Chunks:" << chunks);
+
+    if (m_smart_buffer_test_active)
+    {
+        //Test the environment for minimum buffered time required to prevent dropouts
+        //Not related to network performance, but the output device performance
+        int expected_buffer_size = (aligned_len * chunks * 125 / 100); // 125%
+
+        if (m_buffer.size() < expected_buffer_size)
+        {
+            if (sizeToTime(m_smart_bufer_min_size, m_format) + 100 <= MAX_BUFFERED_TIME)
+            {
+                m_smart_bufer_min_size += timeToSize(100, m_format);
+
+                m_size_to_buffer = qMax(m_smart_bufer_min_size, m_size_to_buffer);
+
+                LIB_DEBUG_LEVEL_1("Minimum time to buffer:" << sizeToTime(m_smart_bufer_min_size, m_format) << "ms");
+            }
+        }
+    }
 
     //Play data while it's available in the output device
     while (chunks)
@@ -238,7 +353,7 @@ void AudioOutput::play()
         //Apply volume to samples
         if (!samples.isEmpty())
         {
-            Eigen::Ref<Eigen::VectorXf> samplesX = Eigen::Map<Eigen::VectorXf>((float*)samples.data(), samples.size() / sizeof(float));
+            Eigen::Ref<Eigen::VectorXf> samplesX = Eigen::Map<Eigen::VectorXf>(reinterpret_cast<float*>(samples.data()), samples.size() / int(sizeof(float)));
             samplesX *= m_volume;
         }
 

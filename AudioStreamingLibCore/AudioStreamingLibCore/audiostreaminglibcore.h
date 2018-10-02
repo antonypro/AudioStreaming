@@ -6,10 +6,10 @@
 #include <QtNetwork>
 #include "discoverclient.h"
 
-class Worker;
+class AudioStreamingWorker;
 
 #define MIN_BUFFERED_TIME 10
-#define MAX_BUFFERED_TIME 100 //Time to buffer plus this value
+#define MAX_BUFFERED_TIME 1000 //Time to buffer plus this value
 
 #define MAX_ID_LENGTH 20
 
@@ -19,9 +19,9 @@ public:
     StreamingInfo()
     {
         //Default values
-        m_id = QString(MAX_ID_LENGTH, (char)0);
+        m_id = QString(MAX_ID_LENGTH, char(0));
         m_work_mode = StreamingWorkMode::Undefined;
-        m_time_to_buffer = 300;
+        m_time_to_buffer = 0;
         m_input_dev_type = AudioDeviceType::LibraryAudioDevice;
         m_output_dev_type = AudioDeviceType::LibraryAudioDevice;
         m_input = QAudioDeviceInfo::defaultInputDevice();
@@ -32,7 +32,7 @@ public:
         m_encryption_enabled = false;
     }
 
-    typedef enum StreamingWorkMode
+    enum class StreamingWorkMode
     {
         Undefined,
         BroadcastClient,
@@ -40,13 +40,13 @@ public:
         WalkieTalkieClient,
         WalkieTalkieServer,
         WebClient
-    }StreamingWorkMode;
+    };
 
-    typedef enum AudioDeviceType
+    enum class AudioDeviceType
     {
         LibraryAudioDevice,
         CustomAudioDevice
-    }AudioDeviceType;
+    };
 
     QByteArray negotiationString()
     {
@@ -111,7 +111,7 @@ public:
     }
     void setID(const QString &id)
     {
-        m_id = id.leftJustified(MAX_ID_LENGTH, (char)0, true);
+        m_id = id.leftJustified(MAX_ID_LENGTH, char(0), true);
     }
     void setWorkMode(const StreamingWorkMode &work_mode)
     {
@@ -210,6 +210,8 @@ signals:
     void connectedToServer(QByteArray);
     void disconnected(QHostAddress);
     void pending(QHostAddress,QString);
+    void webClientLoggedIn();
+    void webClientWarning(QString);
     void inputData(QByteArray);
     void veryInputData(QByteArray);
     void outputData(QByteArray);
@@ -228,8 +230,9 @@ public slots:
     bool isRunning();
     DiscoverClient *discoverInstance();
     void listen(quint16 port, bool auto_accept = true, const QByteArray &password = QByteArray(), int max_connections = 30);
-    void connectToHost(const QString &host, quint16 port, const QByteArray &password = QByteArray());
+    void connectToHost(const QString &host, quint16 port, const QByteArray &password = QByteArray(), bool new_user = false);
     void connectToPeer(const QString &ID);
+    void disconnectFromPeer();
     void acceptSslCertificate();
     void acceptConnection();
     void rejectConnection();
@@ -253,7 +256,7 @@ private slots:
 private:
     bool m_input_muted;
     int m_volume;
-    Worker *m_worker;
+    AudioStreamingWorker *m_worker;
     DiscoverClient *m_client_discover;
     bool m_running;
     bool m_delete_pending;

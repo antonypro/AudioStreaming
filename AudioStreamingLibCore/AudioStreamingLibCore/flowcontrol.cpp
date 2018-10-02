@@ -75,7 +75,7 @@ void FlowControl::askforbytes() //Compute the size in bytes of the elapsed time
     qint64 elapsed = elapsed_time - m_elapsed_time;
     m_elapsed_time = elapsed_time;
 
-    int bytes = nanoTimeToSize(elapsed, m_channels, sizeof(float) * 8, m_sample_rate);
+    int bytes = int(nanoTimeToSize(elapsed, m_channels, int(sizeof(float)) * 8, m_sample_rate));
 
     emit getbytes(bytes);
 }

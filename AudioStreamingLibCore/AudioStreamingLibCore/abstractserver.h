@@ -14,10 +14,10 @@ public:
     explicit AbstractServer(QObject *parent = nullptr);
 
 signals:
-    void connected(PeerData,QString);
+    void connected(PeerData, QString);
     void disconnected(PeerData);
     void readyRead(PeerData);
-    void pending(QHostAddress,QString);
+    void pending(QHostAddress, QString);
     void error(QString);
 
 public slots:

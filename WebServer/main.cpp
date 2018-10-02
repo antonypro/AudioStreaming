@@ -3,7 +3,7 @@
 #include "sslserver.h"
 #include "common.h"
 
-QFile *log_file = nullptr;
+static QFile *log_file = nullptr;
 QSettings *global_settings = nullptr;
 
 void messageOutput(QtMsgType type, const QMessageLogContext &context, const QString &msg)

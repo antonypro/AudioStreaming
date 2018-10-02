@@ -28,7 +28,7 @@ private:
     QAudioFormat m_format;
     float m_level;
     QByteArray m_buffer;
-    int m_size;
+    QTimer *m_timer;
 };
 
 #endif // LEVELMETER_H

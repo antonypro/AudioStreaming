@@ -57,6 +57,51 @@ static inline QString cleanString(const QString &s)
     return output;
 }
 
+static inline int msgBoxQuestion(const QString &title, const QString &message, QWidget *parent = nullptr)
+{
+    QMessageBox msgbox(parent);
+
+#ifdef Q_OS_MACOS
+    msgbox.setWindowModality(Qt::WindowModal);
+#endif
+    msgbox.setIcon(QMessageBox::Question);
+    msgbox.setStandardButtons(QMessageBox::Yes);
+    msgbox.addButton(QMessageBox::No);
+    msgbox.setDefaultButton(QMessageBox::Yes);
+    msgbox.setWindowTitle(title);
+    msgbox.setText(message);
+
+    return msgbox.exec();
+}
+
+static inline void msgBoxWarning(const QString &title, const QString &message, QWidget *parent = nullptr)
+{
+    QMessageBox msgbox(parent);
+
+#ifdef Q_OS_MACOS
+    msgbox.setWindowModality(Qt::WindowModal);
+#endif
+    msgbox.setIcon(QMessageBox::Warning);
+    msgbox.setWindowTitle(title);
+    msgbox.setText(message);
+
+    msgbox.exec();
+}
+
+static inline void msgBoxCritical(const QString &title, const QString &message, QWidget *parent = nullptr)
+{
+    QMessageBox msgbox(parent);
+
+#ifdef Q_OS_MACOS
+    msgbox.setWindowModality(Qt::WindowModal);
+#endif
+    msgbox.setIcon(QMessageBox::Critical);
+    msgbox.setWindowTitle(title);
+    msgbox.setText(message);
+
+    msgbox.exec();
+}
+
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
@@ -98,6 +143,8 @@ private slots:
     void clientDisconnected();
     void serverDisconnected();
     void pending(const QHostAddress &address, const QString &id);
+    void webClientLoggedIn();
+    void webClientWarning(const QString &message);
     void writeText();
     void receiveText(const QByteArray &data);
     void finished();
@@ -105,6 +152,7 @@ private slots:
 
 private:
     QString m_peer;
+    bool m_connecting_connected_to_peer;
 
     AudioStreamingLibCore *m_audio_lib;
     AudioStreamingLibCore *m_discover_instance;
@@ -169,7 +217,8 @@ private:
     QLineEdit *lineclientpassword;
     QLineEdit *lineserverpassword;
 
-    QPushButton *buttonstartweb;
+    QPushButton *buttonsigninweb;
+    QPushButton *buttonsignupweb;
     QPushButton *buttonconnect;
     QPushButton *buttonstartserver;
 
@@ -195,6 +244,8 @@ private:
 
     QByteArray m_local_audio;
     QByteArray m_peer_audio;
+
+    bool m_msgbox_visible;
 };
 
 #endif // MAINWINDOW_H

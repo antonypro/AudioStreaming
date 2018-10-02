@@ -11,33 +11,35 @@
 #include <unistd.h>
 #endif
 
+#define TIMEOUT 30*1000
+
 extern QSettings *global_settings;
 
 extern QMutex record_mutex;
 extern qint64 record_count;
 
 #define DEBUG_FUNCTION(message)\
-    {\
-        record_mutex.lock();\
-        \
-        qDebug()\
-        << "Date and time(UTC):" << qPrintable(QDateTime::currentDateTimeUtc().toString("yyyy/MM/dd hh:mm:ss"))\
-        << "\nFile:" << __FILE__\
-        << "\nLine:" << __LINE__\
-        << "\nFunction:" << __FUNCTION__\
-        << "\nIndex:" << ++record_count;\
-        \
-        qDebug()\
-        << "Message:"\
-        << message\
-        << "\n";\
-        \
-        record_mutex.unlock();\
-    }
+{\
+    record_mutex.lock();\
+    \
+    qDebug()\
+    << "Date and time(UTC):" << qPrintable(QDateTime::currentDateTimeUtc().toString("yyyy/MM/dd hh:mm:ss"))\
+    << "\nFile:" << __FILE__\
+    << "\nLine:" << __LINE__\
+    << "\nFunction:" << __FUNCTION__\
+    << "\nIndex:" << ++record_count;\
+    \
+    qDebug()\
+    << "Message:"\
+    << message\
+    << "\n";\
+    \
+    record_mutex.unlock();\
+}
 
 #define SETTONULLPTR(obj) QObject::connect(obj, &QObject::destroyed, [&]{obj = nullptr;})
 
-#define NEGOTIATION_STRING QByteArray("WalkieTalkieTCPDemo").leftJustified(128, (char)0, true)
+#define NEGOTIATION_STRING QByteArray("WalkieTalkieTCPDemo").leftJustified(128, char(0), true)
 
 typedef struct PeerData {
     QByteArray data;
@@ -53,8 +55,12 @@ enum
     PeerTryConnect,
     ConnectionRequested,
     ConnectionAnswer,
-    ConnectionInfo,
-    Port
+    LoggedIn,
+    ConnectedToPeer,
+    DisconnectedFromPeer,
+    P2PData,
+    Alive,
+    Warning
 };
 }
 
@@ -66,9 +72,9 @@ static inline QString cleanString(const QString &s)
 
     diacriticLetters = QString::fromUtf8("ŠŒŽšœžŸ¥µÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖØÙÚÛÜÝßàáâãäåæçèéêëìíîïðñòóôõöøùúûüýÿ");
     noDiacriticLetters << "S"<<"OE"<<"Z"<<"s"<<"oe"<<"z"<<"Y"<<"Y"<<"u"<<"A"<<"A"<<"A"<<"A"<<"A"<<"A"<<"AE"<<"C"
-                        <<"E"<<"E"<<"E"<<"E"<<"I"<<"I"<<"I"<<"I"<<"D"<<"N"<<"O"<<"O"<<"O"<<"O"<<"O"<<"O"<<"U"<<"U"
-                       <<"U"<<"U"<<"Y"<<"s"<<"a"<<"a"<<"a"<<"a"<<"a"<<"a"<<"ae"<<"c"<<"e"<<"e"<<"e"<<"e"<<"i"<<"i"
-                      <<"i"<<"i"<<"o"<<"n"<<"o"<<"o"<<"o"<<"o"<<"o"<<"o"<<"u"<<"u"<<"u"<<"u"<<"y"<<"y";
+                       <<"E"<<"E"<<"E"<<"E"<<"I"<<"I"<<"I"<<"I"<<"D"<<"N"<<"O"<<"O"<<"O"<<"O"<<"O"<<"O"<<"U"<<"U"
+                      <<"U"<<"U"<<"Y"<<"s"<<"a"<<"a"<<"a"<<"a"<<"a"<<"a"<<"ae"<<"c"<<"e"<<"e"<<"e"<<"e"<<"i"<<"i"
+                     <<"i"<<"i"<<"o"<<"n"<<"o"<<"o"<<"o"<<"o"<<"o"<<"o"<<"u"<<"u"<<"u"<<"u"<<"y"<<"y";
 
     acceptedCharacters << "0" << "1" << "2" << "3" << "4" << "5" << "6" << "7" << "8" << "9"
                        << "a" << "b" << "c" << "d" << "e" << "f" << "g" << "h" << "i" << "j"

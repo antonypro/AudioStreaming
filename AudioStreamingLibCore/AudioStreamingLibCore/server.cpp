@@ -31,7 +31,7 @@ void Server::listen(quint16 port, bool auto_accept, int max_connections,
 
     m_auto_accept = auto_accept;
 
-    m_negotiation_string = negotiation_string.leftJustified(128, (char)0, true);
+    m_negotiation_string = negotiation_string.leftJustified(128, char(0), true);
 
     m_id = id;
 
@@ -133,7 +133,7 @@ void Server::newConnectionPrivate(qintptr descriptor)
     QTimer *timer = new QTimer(this);
     timer->setSingleShot(true);
     connect(timer, &QTimer::timeout, this, &Server::timeout);
-    timer->start(10 * 1000);
+    timer->start(TIMEOUT);
 
     m_descriptor_hash.insert(socket, descriptor);
     m_socket_hash.insert(descriptor, socket);
@@ -232,9 +232,8 @@ void Server::readyReadPrivate()
     QTcpSocket *socket = static_cast<QTcpSocket*>(sender());
 
     QByteArray *m_buffer = &m_buffer_hash[socket];
-    qint32 *size = &m_size_hash[socket];
-    Q_UNUSED(size)
-#define m_size *size
+    qint32 &m_size = m_size_hash[socket];
+
     while (socket->bytesAvailable() > 0)
     {
         m_buffer->append(socket->readAll());

@@ -670,7 +670,7 @@ template<typename ExpressionType, int Direction> class VectorwiseOp
   * \sa rowwise(), class VectorwiseOp, \ref TutorialReductionsVisitorsBroadcasting
   */
 template<typename Derived>
-EIGEN_DEVICE_FUNC inline typename DenseBase<Derived>::ColwiseReturnType
+inline typename DenseBase<Derived>::ColwiseReturnType
 DenseBase<Derived>::colwise()
 {
   return ColwiseReturnType(derived());
@@ -684,7 +684,7 @@ DenseBase<Derived>::colwise()
   * \sa colwise(), class VectorwiseOp, \ref TutorialReductionsVisitorsBroadcasting
   */
 template<typename Derived>
-EIGEN_DEVICE_FUNC inline typename DenseBase<Derived>::RowwiseReturnType
+inline typename DenseBase<Derived>::RowwiseReturnType
 DenseBase<Derived>::rowwise()
 {
   return RowwiseReturnType(derived());

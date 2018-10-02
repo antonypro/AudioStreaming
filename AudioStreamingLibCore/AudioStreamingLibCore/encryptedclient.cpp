@@ -35,15 +35,18 @@ bool EncryptedClient::testSsl()
 void EncryptedClient::connectToHost(const QString &host, quint16 port,
                                     const QByteArray &negotiation_string,
                                     const QString &id,
-                                    const QByteArray &password)
+                                    const QByteArray &password,
+                                    bool new_user)
 {
+    Q_UNUSED(new_user)
+
     if (!testSsl())
         return;
 
     if (m_socket)
         return;
 
-    m_negotiation_string = negotiation_string.leftJustified(128, (char)0, true);
+    m_negotiation_string = negotiation_string.leftJustified(128, char(), true);
     m_id = id;
 
     m_socket = new QTcpSocket(this);
@@ -55,7 +58,7 @@ void EncryptedClient::connectToHost(const QString &host, quint16 port,
 
     connect(m_socket, &QTcpSocket::readyRead, this, &EncryptedClient::readyBeginEncryption);
 
-    m_timer->start(10 * 1000);
+    m_timer->start(TIMEOUT);
 
     m_openssl->setPassword(password);
 
@@ -67,6 +70,11 @@ void EncryptedClient::connectToHost(const QString &host, quint16 port,
 void EncryptedClient::connectToPeer(const QString &peer_id)
 {
     Q_UNUSED(peer_id)
+}
+
+void EncryptedClient::disconnectFromPeer()
+{
+
 }
 
 void EncryptedClient::acceptSslCertificate()

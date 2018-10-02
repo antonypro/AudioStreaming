@@ -21,15 +21,17 @@ public slots:
     void stop();
 
 private slots:
-    void newP2P();
     void newConnectionPrivate(qintptr descriptor);
-    void timeout();
+    void timeout(QSslSocket *socket);
+    void testConnections();
     void sslErrors(QList<QSslError> errors);
     void encrypted();
     void readyReadPrivate();
     void process(const PeerData &pd);
     void disconnectedPrivate();
     void removeSocket(QSslSocket *socket);
+    void writeWarning(QSslSocket *socket, const QString &message, bool remove_socket = false);
+    void disconnectedFromPeer(QSslSocket *socket);
 
 private:
     //Functions
@@ -37,7 +39,6 @@ private:
 
     //Variables
     TcpServer *m_server;
-    QTcpServer *m_server_p2p;
 
     Sql m_sql;
 
@@ -45,15 +46,17 @@ private:
     QSslCertificate m_cert;
 
     QList<QSslSocket*> m_socket_list;
+    QList<QSslSocket*> m_connecting_connected_list;
     QByteArrayList m_id_list;
     QHash<qintptr, QSslSocket*> m_socket_hash;
     QHash<QSslSocket*, QByteArray> m_id_hash;
     QHash<QSslSocket*, qintptr> m_descriptor_hash;
     QHash<QSslSocket*, QByteArray> m_buffer_hash;
     QHash<QSslSocket*, qint32> m_size_hash;
-    QHash<QSslSocket*, QTimer*> m_timer_hash;
     QHash<QSslSocket*, QSslSocket*> m_accept_hash;
-    QHash<QSslSocket*, QByteArray> m_port_hash;
+    QHash<QSslSocket*, QSslSocket*> m_connected_1;
+    QHash<QSslSocket*, QSslSocket*> m_connected_2;
+    QHash<QSslSocket*, QElapsedTimer> m_alive_hash;
 
     int m_max_connections;
 };

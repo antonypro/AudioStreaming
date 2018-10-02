@@ -10,15 +10,17 @@ r8brain::r8brain(QObject *parent) : QObject(parent)
     m_InBufs = nullptr;
     m_Resamps = nullptr;
     m_opp = nullptr;
-    m_initalized = false;
+    m_initialized = false;
 
     START_THREAD
 }
 
 r8brain::~r8brain()
 {
-    if (!m_initalized)
+    if (!m_initialized)
         return;
+
+    m_initialized = false;
 
     delete[] m_InBufs;
     delete[] m_Resamps;
@@ -27,7 +29,7 @@ r8brain::~r8brain()
 
 void r8brain::startPrivate(int in_sample_rate, int out_sample_rate, int channels, int sample_size)
 {
-    if (m_initalized)
+    if (m_initialized)
         return;
 
     switch (sample_size)
@@ -42,7 +44,7 @@ void r8brain::startPrivate(int in_sample_rate, int out_sample_rate, int channels
         return;
     }
 
-    m_initalized = true;
+    m_initialized = true;
 
     m_channels_input = m_channels_output = channels;
 
@@ -76,7 +78,7 @@ void r8brain::start(int in_sample_rate, int out_sample_rate, int channels, int s
 //If more than two channels, down to two, and resample to OPUS_SAMPLE_RATE
 void r8brain::writePrivate(const QByteArray &input)
 {
-    if (!m_initalized)
+    if (!m_initialized)
         return;
 
     int readCount = 0;
@@ -85,15 +87,15 @@ void r8brain::writePrivate(const QByteArray &input)
     {
     case 32:
     {
-        if (input.size() % sizeof(float) != 0)
+        if (input.size() % int(sizeof(float)) != 0)
         {
             emit error("Corrupted input!");
             return;
         }
 
-        float *samples = (float*)input.data();
+        const float *samples = reinterpret_cast<const float*>(input.data());
 
-        int samplescount = input.size() / sizeof(float);
+        int samplescount = input.size() / int(sizeof(float));
 
         QByteArray downchanneldata;
 
@@ -127,8 +129,8 @@ void r8brain::writePrivate(const QByteArray &input)
 
             for (int i = 0; i < samplescount; i ++)
             {
-                downchanneldata.append((char*)&L[i], sizeof(float));
-                downchanneldata.append((char*)&R[i], sizeof(float));
+                downchanneldata.append(reinterpret_cast<char*>(&L[i]), sizeof(float));
+                downchanneldata.append(reinterpret_cast<char*>(&R[i]), sizeof(float));
             }
 
             break;
@@ -155,13 +157,13 @@ void r8brain::writePrivate(const QByteArray &input)
             Eigen::VectorXf L = (FL / 4 + RL / 4 + C / 4 + LFE / 4);
             Eigen::VectorXf R = (FR / 4 + RR / 4 + C / 4 + LFE / 4);
 
-            downchanneldata.append((char*)&L, sizeof(float));
-            downchanneldata.append((char*)&R, sizeof(float));
+            downchanneldata.append(reinterpret_cast<char*>(&L), sizeof(float));
+            downchanneldata.append(reinterpret_cast<char*>(&R), sizeof(float));
 
             for (int i = 0; i < samplescount; i ++)
             {
-                downchanneldata.append((char*)&L[i], sizeof(float));
-                downchanneldata.append((char*)&R[i], sizeof(float));
+                downchanneldata.append(reinterpret_cast<char*>(&L[i]), sizeof(float));
+                downchanneldata.append(reinterpret_cast<char*>(&R[i]), sizeof(float));
             }
 
             break;
@@ -186,8 +188,8 @@ void r8brain::writePrivate(const QByteArray &input)
 
             for (int i = 0; i < samplescount; i ++)
             {
-                downchanneldata.append((char*)&L[i], sizeof(float));
-                downchanneldata.append((char*)&R[i], sizeof(float));
+                downchanneldata.append(reinterpret_cast<char*>(&L[i]), sizeof(float));
+                downchanneldata.append(reinterpret_cast<char*>(&R[i]), sizeof(float));
             }
 
             break;
@@ -202,13 +204,13 @@ void r8brain::writePrivate(const QByteArray &input)
             break;
         }
 
-        float *outputsamples = (float*)downchanneldata.data();
+        float *outputsamples = reinterpret_cast<float*>(downchanneldata.data());
 
-        readCount = downchanneldata.size() / sizeof(float) / m_channels_output;
+        readCount = downchanneldata.size() / int(sizeof(float)) / m_channels_output;
 
         for (int j = 0; j < readCount; j++)
             for (int i = 0; i < m_channels_output; i++)
-                m_InBufs[i][j] = outputsamples[j * m_channels_output + i];
+                m_InBufs[i][j] = double(outputsamples[j * m_channels_output + i]);
 
         break;
     }
@@ -228,8 +230,8 @@ void r8brain::writePrivate(const QByteArray &input)
     {
         for (int i = 0; i < m_channels_output; i++)
         {
-            float val = (float)(m_opp[i][j]);
-            data.append((char*)&val, sizeof(float));
+            float val = float(m_opp[i][j]);
+            data.append(reinterpret_cast<char*>(&val), sizeof(float));
         }
     }
 

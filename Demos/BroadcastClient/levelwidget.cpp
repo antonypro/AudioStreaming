@@ -31,9 +31,9 @@ void LevelWidget::setlevel(float level)
 
 void LevelWidget::calculateRMSLevel(const QByteArray &data)
 {
-    int size = data.size() / sizeof(float);
+    int size = data.size() / int(sizeof(float));
 
-    const float *samples = (const float*)data.constData();
+    const float *samples = reinterpret_cast<const float*>(data.constData());
 
     m_rms_size += size;
 
@@ -48,15 +48,15 @@ void LevelWidget::paintEvent(QPaintEvent *event)
     float m_rms_level = 0;
 
     if (m_rms_size > 0)
-        m_rms_level = qSqrt((1 / (float)m_rms_size) * m_sum_rms);
+        m_rms_level = float(qSqrt((1 / qreal(m_rms_size)) * qreal(m_sum_rms)));
 
     QPainter painter(this);
     QRect currentlevelrect = rect();
     painter.fillRect(currentlevelrect, Qt::black);
     int height = currentlevelrect.height();
-    currentlevelrect.adjust(0, height - m_level * height, 0, 0);
+    currentlevelrect.adjust(0, int(height - m_level * height), 0, 0);
     painter.fillRect(currentlevelrect, Qt::green);
     currentlevelrect = rect();
-    currentlevelrect.adjust(0, height - m_rms_level * height, 0, 0);
+    currentlevelrect.adjust(0, int(height - m_rms_level * height), 0, 0);
     painter.fillRect(currentlevelrect, Qt::red);
 }

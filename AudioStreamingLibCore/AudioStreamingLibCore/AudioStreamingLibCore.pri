@@ -9,7 +9,7 @@ CONFIG +=   staticlib
 INCLUDEPATH += $$PWD/3rdparty
 
 SOURCES +=  $$PWD/audiostreaminglibcore.cpp \
-            $$PWD/worker.cpp \
+            $$PWD/audiostreamingworker.cpp \
             $$PWD/discoverserver.cpp \
             $$PWD/discoverclient.cpp \
             $$PWD/abstractclient.cpp \
@@ -28,7 +28,7 @@ SOURCES +=  $$PWD/audiostreaminglibcore.cpp \
             $$PWD/levelmeter.cpp
 
 HEADERS +=  $$PWD/audiostreaminglibcore.h \
-            $$PWD/worker.h \
+            $$PWD/audiostreamingworker.h \
             $$PWD/discoverserver.h \
             $$PWD/discoverclient.h \
             $$PWD/abstractclient.h \
@@ -58,8 +58,6 @@ HEADERS +=  $$PWD/opusencoderclass.h \
             $$PWD/opusdecoderclass.h \
             $$PWD/r8brain.h
 
-
-
 win32{
 INCLUDEPATH += $$WIN_R8BRAIN_RESAMPLER_INCLUDE
 SOURCES += $$WIN_R8BRAIN_RESAMPLER_INCLUDE/r8bbase.cpp
@@ -80,9 +78,9 @@ SOURCES += $$MACOS_R8BRAIN_RESAMPLER_INCLUDE/r8bbase.cpp
 
 #Copy header files
 
-copyfile1.commands = $(COPY_FILE) $$shell_path($$PWD/AudioStreamingLibCore) $$shell_path($$PWD/../include)
-copyfile2.commands = $(COPY_FILE) $$shell_path($$PWD/audiostreaminglibcore.h) $$shell_path($$PWD/../include)
-copyfile3.commands = $(COPY_FILE) $$shell_path($$PWD/discoverclient.h) $$shell_path($$PWD/../include)
+copyfile1.commands = $(COPY_FILE) $$system_path($$PWD/AudioStreamingLibCore) $$system_path($$PWD/../include)
+copyfile2.commands = $(COPY_FILE) $$system_path($$PWD/audiostreaminglibcore.h) $$system_path($$PWD/../include)
+copyfile3.commands = $(COPY_FILE) $$system_path($$PWD/discoverclient.h) $$system_path($$PWD/../include)
 
 first.depends = $(first) copyfile1 copyfile2 copyfile3
 

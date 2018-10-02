@@ -17,13 +17,10 @@ bool Sql::open()
 
     m_query = QSqlQuery(m_db);
 
-    if (!m_query.exec("select count(*) from sqlite_master where type='table' and name='users';"))
+    if (!m_query.exec("select 1 from sqlite_master where type='table' and name='users';"))
         return false;
 
     if (!m_query.next())
-        return false;
-
-    if (m_query.value(0).toInt() == 0)
     {
         bool result = m_query.exec("create table users (user text primary key, password text);");
 
@@ -86,7 +83,7 @@ bool Sql::loginUser(const QString &user, const QString &password)
         return false;
 
     if (!m_query.next())
-        return createUser(user, password);
+        return false;
 
     QByteArray password_db = QByteArray::fromHex(m_query.value(0).toString().toLatin1());
 
@@ -102,4 +99,14 @@ bool Sql::loginUser(const QString &user, const QString &password)
         return false;
 
     return true;
+}
+
+bool Sql::userExists(const QString &user)
+{
+    QString user_db = user;
+
+    m_query.prepare("select 1 from users where user = ?;");
+    m_query.bindValue(0, user_db);
+
+    return (m_query.exec() && m_query.next());
 }

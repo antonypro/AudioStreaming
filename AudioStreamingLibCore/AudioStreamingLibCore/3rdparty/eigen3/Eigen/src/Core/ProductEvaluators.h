@@ -785,7 +785,11 @@ public:
     _Vectorizable = bool(int(MatrixFlags)&PacketAccessBit) && _SameTypes && (_ScalarAccessOnDiag || (bool(int(DiagFlags)&PacketAccessBit))),
     _LinearAccessMask = (MatrixType::RowsAtCompileTime==1 || MatrixType::ColsAtCompileTime==1) ? LinearAccessBit : 0,
     Flags = ((HereditaryBits|_LinearAccessMask) & (unsigned int)(MatrixFlags)) | (_Vectorizable ? PacketAccessBit : 0),
-    Alignment = evaluator<MatrixType>::Alignment
+    Alignment = evaluator<MatrixType>::Alignment,
+
+    AsScalarProduct =     (DiagonalType::SizeAtCompileTime==1)
+                      ||  (DiagonalType::SizeAtCompileTime==Dynamic && MatrixType::RowsAtCompileTime==1 && ProductOrder==OnTheLeft)
+                      ||  (DiagonalType::SizeAtCompileTime==Dynamic && MatrixType::ColsAtCompileTime==1 && ProductOrder==OnTheRight)
   };
   
   diagonal_product_evaluator_base(const MatrixType &mat, const DiagonalType &diag)
@@ -797,7 +801,10 @@ public:
   
   EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE const Scalar coeff(Index idx) const
   {
-    return m_diagImpl.coeff(idx) * m_matImpl.coeff(idx);
+    if(AsScalarProduct)
+      return m_diagImpl.coeff(0) * m_matImpl.coeff(idx);
+    else
+      return m_diagImpl.coeff(idx) * m_matImpl.coeff(idx);
   }
   
 protected:
@@ -851,7 +858,7 @@ struct product_evaluator<Product<Lhs, Rhs, ProductKind>, ProductTag, DiagonalSha
     return m_diagImpl.coeff(row) * m_matImpl.coeff(row, col);
   }
   
-#ifndef EIGEN_CUDACC
+#ifndef __CUDACC__
   template<int LoadMode,typename PacketType>
   EIGEN_STRONG_INLINE PacketType packet(Index row, Index col) const
   {
@@ -895,7 +902,7 @@ struct product_evaluator<Product<Lhs, Rhs, ProductKind>, ProductTag, DenseShape,
     return m_matImpl.coeff(row, col) * m_diagImpl.coeff(col);
   }
   
-#ifndef EIGEN_CUDACC
+#ifndef __CUDACC__
   template<int LoadMode,typename PacketType>
   EIGEN_STRONG_INLINE PacketType packet(Index row, Index col) const
   {

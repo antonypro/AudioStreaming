@@ -15,10 +15,13 @@ public:
 signals:
     void connected(PeerData,QString);
     void connectedToServer(QByteArray);
-    void connectedToPeer(PeerData,QString);
+    void connectedToPeer(QString);
+    void disconnectedFromPeer();
+    void webClientLoggedIn();
+    void webClientWarning(QString);
     void disconnected(PeerData);
     void readyRead(PeerData);
-    void pending(QHostAddress,QString);
+    void pending(QHostAddress, QString);
     void error(QString);
 
 public slots:
@@ -26,8 +29,10 @@ public slots:
     virtual void connectToHost(const QString &host, quint16 port,
                                const QByteArray &negotiation_string,
                                const QString &id,
-                               const QByteArray &password) = 0;
+                               const QByteArray &password,
+                               bool new_user) = 0;
     virtual void connectToPeer(const QString &peer_id) = 0;
+    virtual void disconnectFromPeer() = 0;
     virtual void stop() = 0;
     virtual int write(const QByteArray &data) = 0;
     virtual void acceptSslCertificate() = 0;

@@ -2,14 +2,15 @@
 
 #define TITLE "Broadcast Client Demo"
 
-QPlainTextEdit *debug_edit = nullptr;
+static QPlainTextEdit *debug_edit = nullptr;
 
 void messageHandler(QtMsgType type, const QMessageLogContext &context, const QString &msg)
 {
     Q_UNUSED(type)
     Q_UNUSED(context)
 
-    QMetaObject::invokeMethod(debug_edit, "appendPlainText", Q_ARG(QString, msg));
+    if (debug_edit)
+        QMetaObject::invokeMethod(debug_edit, "appendPlainText", Q_ARG(QString, msg));
 }
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
@@ -106,6 +107,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     layout_record->addWidget(boxautostart, 2, 0, 1, 5);
 
     texteditlog = new QPlainTextEdit(this);
+    texteditlog->setMaximumBlockCount(10000);
     debug_edit = texteditlog;
 
     tabwidget->addTab(areasettings, "Settings");
@@ -149,7 +151,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 
     linehost->setText("localhost");
     lineport->setText("1024");
-    linetime->setText("300");
+    linetime->setText("0");
 
     getDevInfo();
 
@@ -158,7 +160,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 
 MainWindow::~MainWindow()
 {
-    qInstallMessageHandler(0);
+    debug_edit = nullptr;
 }
 
 void MainWindow::currentChanged(int index)
@@ -184,7 +186,7 @@ void MainWindow::startDiscover()
     connect(instance, &DiscoverClient::peerFound, this, &MainWindow::peerFound);
     connect(this, &MainWindow::stoprequest, instance, &DiscoverClient::deleteLater);
 
-    instance->discover(lineport->text().toInt(), QByteArray("BroadcastTCPDemo"));
+    instance->discover(quint16(lineport->text().toInt()), QByteArray("BroadcastTCPDemo"));
 }
 
 void MainWindow::stopDiscover()
@@ -274,7 +276,7 @@ void MainWindow::start()
 
     m_audio_lib->setVolume(slidervolume->value());
 
-    m_audio_lib->connectToHost(linehost->text().trimmed(), lineport->text().toInt(), password);
+    m_audio_lib->connectToHost(linehost->text().trimmed(), quint16(lineport->text().toInt()), password);
 }
 
 void MainWindow::adjustSettings()
@@ -375,7 +377,9 @@ void MainWindow::startPauseRecord()
             if (!m_audio_recorder->open())
             {
                 stopRecord();
-                QMessageBox::critical(this, "Error", "Error openning file for record!");
+
+                msgBoxCritical("Error", "Error openning file for record!", this);
+
                 return;
             }
         }
@@ -432,7 +436,7 @@ void MainWindow::writeToFile(const QByteArray &data)
 {
     m_audio_recorder->write(AudioStreamingLibCore::convertFloatToInt16(data));
 
-    qint64 recorded = AudioStreamingLibCore::sizeToTime(m_audio_recorder->size() - 44, m_format);
+    int recorded = int(AudioStreamingLibCore::sizeToTime(m_audio_recorder->size() - 44, m_format));
 
     QTime time = QTime(0, 0, 0).addMSecs(recorded);
 
@@ -451,7 +455,7 @@ void MainWindow::volumeChanged(int volume)
 void MainWindow::error(const QString &error)
 {
     if (!error.isEmpty())
-        QMessageBox::critical(this, "Error", error);
+        msgBoxCritical("Error", error, this);
 }
 
 void MainWindow::connected(const QHostAddress &address, const QString &id)
@@ -519,5 +523,5 @@ void MainWindow::getDevInfo()
         comboboxaudiooutput->addItem(outputdevices.at(i).deviceName(), qVariantFromValue(outputdevices.at(i)));
 
     if (comboboxaudiooutput->count() == 0)
-        QMessageBox::warning(this, "Error", "No output device found!");
+        msgBoxCritical("Error", "No output device found!", this);
 }

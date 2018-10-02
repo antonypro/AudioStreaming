@@ -30,7 +30,7 @@ void WaveFormWidget::start(const QAudioFormat &format)
     m_initialized = true;
     m_format = format;
 
-    m_size = AudioStreamingLibCore::timeToSize(50, m_format);
+    m_size = int(AudioStreamingLibCore::timeToSize(50, m_format));
 }
 
 void WaveFormWidget::clear()
@@ -63,14 +63,14 @@ void WaveFormWidget::calculateWaveFormThread(const QByteArray &data, int window_
         QByteArray buffer = m_wave_form_buffer.mid(0, m_size);
         m_wave_form_buffer.remove(0, m_size);
 
-        int numSamples = buffer.size() / sizeof(float);
+        int numSamples = buffer.size() / int(sizeof(float));
 
         QVector<float> wave_form_vector;
         wave_form_vector.resize(numSamples);
 
-        const float *samples = (const float*)buffer.constData();
+        const float *samples = reinterpret_cast<const float*>(buffer.constData());
 
-        memcpy(wave_form_vector.data(), samples, buffer.size());
+        memcpy(wave_form_vector.data(), samples, uint(buffer.size()));
 
         QVector<QPoint> point_list;
 
@@ -98,8 +98,8 @@ void WaveFormWidget::calculateWaveFormThread(const QByteArray &data, int window_
                     level = sample;
             }
 
-            QPoint point = QPoint(qRound(i * ((float)(window_width - 1) / numSamples)),
-                                  window_height - level * qRound(window_height * 0.75));
+            QPoint point = QPoint(qRound(i * (float(window_width - 1) / numSamples)),
+                                  int(window_height - level * qRound(window_height * 0.75)));
 
             if (point_list.isEmpty() || point.x() > point_list.last().x() + 2)
                 point_list.append(point);
@@ -118,8 +118,8 @@ void WaveFormWidget::calculateWaveFormThread(const QByteArray &data, int window_
                     level = sample;
             }
 
-            QPoint point = QPoint(qRound(i * ((float)(window_width - 1) / numSamples)),
-                                  window_height - level * qRound(window_height * 0.75));
+            QPoint point = QPoint(qRound(i * (float(window_width - 1) / numSamples)),
+                                  int(window_height - level * qRound(window_height * 0.75)));
 
             if (point_list.isEmpty() || point.x() > point_list.last().x() + 2)
                 point_list.append(point);

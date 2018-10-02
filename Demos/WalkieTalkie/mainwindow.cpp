@@ -2,19 +2,24 @@
 
 #define TITLE "Walkie Talkie Demo"
 
-QPlainTextEdit *debug_edit = nullptr;
+static QPlainTextEdit *debug_edit = nullptr;
 
 void messageHandler(QtMsgType type, const QMessageLogContext &context, const QString &msg)
 {
     Q_UNUSED(type)
     Q_UNUSED(context)
 
-    QMetaObject::invokeMethod(debug_edit, "appendPlainText", Q_ARG(QString, msg));
+    if (debug_edit)
+        QMetaObject::invokeMethod(debug_edit, "appendPlainText", Q_ARG(QString, msg));
 }
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 {
     setWindowTitle(TITLE);
+
+    m_msgbox_visible = false;
+
+    m_connecting_connected_to_peer = false;
 
     m_audio_lib = nullptr;
     m_discover_instance = new AudioStreamingLibCore(this);
@@ -38,7 +43,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     //WebClient
 
     buttonconnecttopeer = new QPushButton(this);
-    buttonconnecttopeer->setText("Connect to peer");
+    buttonconnecttopeer->setText("Connect to user");
     buttonconnecttopeer->setEnabled(false);
 
     labelservertweb = new QLabel(this);
@@ -51,14 +56,16 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     labelportweb->setText("Port:");
 
     lineportweb = new QLineEdit(this);
-    lineportweb->setMinimumWidth(100);
     lineportweb->setText("1024");
 
-    buttonstartweb = new QPushButton(this);
-    buttonstartweb->setText("Connect to server");
+    buttonsigninweb = new QPushButton(this);
+    buttonsigninweb->setText("Connect to server");
+
+    buttonsignupweb = new QPushButton(this);
+    buttonsignupweb->setText("Create new account");
 
     labelwebid = new QLabel(this);
-    labelwebid->setText("ID:");
+    labelwebid->setText("Username:");
 
     linewebid = new QLineEdit(this);
 
@@ -81,31 +88,30 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     labelbuffertimeweb = new QLabel(this);
     labelbuffertimeweb->setText("Buffer time (ms):");
     linebuffertimeweb = new QLineEdit(this);
-    linebuffertimeweb->setText("300");
+    linebuffertimeweb->setText("0");
 
     widget1 = new QWidget(this);
 
     {
         QGridLayout *layout = new QGridLayout(widget1);
 
-        layout->addWidget(buttonconnecttopeer, 0, 0, 1, 2);
-        layout->addWidget(labelservertweb, 1, 0);
-        layout->addWidget(lineserverweb, 1, 1);
-        layout->addWidget(labelportweb, 2, 0);
-        QGridLayout *layout1 = new QGridLayout();
-        layout1->addWidget(lineportweb, 1, 0);
-        layout1->addWidget(buttonstartweb, 1, 1);
-        layout->addLayout(layout1, 2, 1);
-        layout->addWidget(labelwebid, 3, 0);
-        layout->addWidget(linewebid, 3, 1);
-        layout->addWidget(labelwebpassword, 4, 0);
-        layout->addWidget(linewebpassword, 4, 1);
-        layout->addWidget(labelsamplerateweb, 5, 0);
-        layout->addWidget(linesamplerateweb, 5, 1);
-        layout->addWidget(labelchannelsweb, 6, 0);
-        layout->addWidget(linechannelsweb, 6, 1);
-        layout->addWidget(labelbuffertimeweb, 7, 0);
-        layout->addWidget(linebuffertimeweb, 7, 1);
+        layout->addWidget(buttonsigninweb, 0, 0, 1, 2);
+        layout->addWidget(buttonsignupweb, 1, 0, 1, 2);
+        layout->addWidget(buttonconnecttopeer, 2, 0, 1, 2);
+        layout->addWidget(labelservertweb, 3, 0);
+        layout->addWidget(lineserverweb, 3, 1);
+        layout->addWidget(labelportweb, 4, 0);
+        layout->addWidget(lineportweb, 4, 1);
+        layout->addWidget(labelwebid, 5, 0);
+        layout->addWidget(linewebid, 5, 1);
+        layout->addWidget(labelwebpassword, 6, 0);
+        layout->addWidget(linewebpassword, 6, 1);
+        layout->addWidget(labelsamplerateweb, 7, 0);
+        layout->addWidget(linesamplerateweb, 7, 1);
+        layout->addWidget(labelchannelsweb, 8, 0);
+        layout->addWidget(linechannelsweb, 8, 1);
+        layout->addWidget(labelbuffertimeweb, 9, 0);
+        layout->addWidget(linebuffertimeweb, 9, 1);
     }
 
     //Client
@@ -191,7 +197,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     labelbuffertime = new QLabel(this);
     labelbuffertime->setText("Buffer time (ms):");
     linebuffertime = new QLineEdit(this);
-    linebuffertime->setText("300");
+    linebuffertime->setText("0");
 
     widget3 = new QWidget(this);
 
@@ -325,6 +331,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     layout_record->addWidget(boxautostart, 2, 0, 1, 5);
 
     texteditlog = new QPlainTextEdit(this);
+    texteditlog->setMaximumBlockCount(10000);
     debug_edit = texteditlog;
 
     tabwidget->addTab(scrollclientserver, "Client Server");
@@ -341,7 +348,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 
     connect(slidervolume, &QSlider::valueChanged, this, &MainWindow::sliderVolumeValueChanged);
 
-    connect(buttonstartweb, &QPushButton::clicked, this, &MainWindow::webClient);
+    connect(buttonsigninweb, &QPushButton::clicked, this, &MainWindow::webClient);
+    connect(buttonsignupweb, &QPushButton::clicked, this, &MainWindow::webClient);
     connect(buttonconnect, &QPushButton::clicked, this, &MainWindow::client);
     connect(buttonstartserver, &QPushButton::clicked, this, &MainWindow::server);
 
@@ -385,6 +393,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 
     setCentralWidget(mainwidget);
 
+    //Initial size
+    resize(sizeHint());
+
     connect(linewebid, &QLineEdit::textChanged, [=](const QString &text){
         linewebid->blockSignals(true);
         linewebid->setText(cleanString(text));
@@ -402,7 +413,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 
 MainWindow::~MainWindow()
 {
-    qInstallMessageHandler(0);
+    debug_edit = nullptr;
 }
 
 void MainWindow::currentChanged(int index)
@@ -428,7 +439,7 @@ void MainWindow::startDiscover()
     connect(instance, &DiscoverClient::peerFound, this, &MainWindow::peerFound);
     connect(this, &MainWindow::stoprequest, instance, &DiscoverClient::deleteLater);
 
-    instance->discover(lineport->text().toInt(), QByteArray("WalkieTalkieTCPDemo"));
+    instance->discover(quint16(lineport->text().toInt()), QByteArray("WalkieTalkieTCPDemo"));
 }
 
 void MainWindow::stopDiscover()
@@ -469,12 +480,14 @@ void MainWindow::webClient()
 {
     if (m_audio_lib)
     {
-        buttonrecord->setEnabled(false);
+        resetRecordPage();
 
         m_audio_lib->stop();
 
         return;
     }
+
+    bool new_user = (sender() == buttonsignupweb);
 
     m_audio_lib = new AudioStreamingLibCore(this);
 
@@ -498,7 +511,7 @@ void MainWindow::webClient()
     info.setInputDeviceInfo(inputdevinfo);
     info.setOutputDeviceInfo(outputdevinfo);
     info.setWorkMode(StreamingInfo::StreamingWorkMode::WebClient);
-    info.setTimeToBuffer(linebuffertime->text().toInt());
+    info.setTimeToBuffer(linebuffertimeweb->text().toInt());
     info.setEncryptionEnabled(!password.isEmpty());
     info.setGetAudioEnabled(true);
     info.setNegotiationString(QByteArray("WalkieTalkieTCPDemo"));
@@ -517,6 +530,10 @@ void MainWindow::webClient()
 
     connect(m_audio_lib, &AudioStreamingLibCore::pending, this, &MainWindow::pending);
 
+    connect(m_audio_lib, &AudioStreamingLibCore::webClientLoggedIn, this, &MainWindow::webClientLoggedIn);
+
+    connect(m_audio_lib, &AudioStreamingLibCore::webClientWarning, this, &MainWindow::webClientWarning);
+
     connect(m_audio_lib, &AudioStreamingLibCore::adjustSettings, this, &MainWindow::adjustSettings);
 
     connect(m_audio_lib, &AudioStreamingLibCore::extraData, this, &MainWindow::receiveText);
@@ -531,13 +548,13 @@ void MainWindow::webClient()
 
     m_audio_lib->setVolume(slidervolume->value());
 
-    m_audio_lib->connectToHost(lineserverweb->text(), lineportserver->text().toInt(), password);
+    m_audio_lib->connectToHost(lineserverweb->text(), quint16(lineportserver->text().toInt()), password, new_user);
 
     webClientStarted(false);
 
-    buttonstartweb->setText("Connecting...");
+    buttonsigninweb->setText("Stop - Connecting...");
 
-    buttonstartweb->setEnabled(false);
+    buttonsignupweb->setEnabled(false);
 
     tabwidget->setTabEnabled(1, false);
 }
@@ -546,7 +563,7 @@ void MainWindow::client()
 {
     if (m_audio_lib)
     {
-        buttonrecord->setEnabled(false);
+        resetRecordPage();
 
         m_audio_lib->stop();
 
@@ -596,7 +613,7 @@ void MainWindow::client()
 
     m_audio_lib->setVolume(slidervolume->value());
 
-    m_audio_lib->connectToHost(linehost->text().trimmed(), lineport->text().toInt(), password);
+    m_audio_lib->connectToHost(linehost->text().trimmed(), quint16(lineport->text().toInt()), password);
 
     clientStarted(false);
 
@@ -611,7 +628,7 @@ void MainWindow::server()
 {
     if (m_audio_lib)
     {
-        buttonrecord->setEnabled(false);
+        resetRecordPage();
 
         m_audio_lib->stop();
 
@@ -672,7 +689,7 @@ void MainWindow::server()
 
     m_audio_lib->setVolume(slidervolume->value());
 
-    m_audio_lib->listen(lineportserver->text().toInt(), false, password);
+    m_audio_lib->listen(quint16(lineportserver->text().toInt()), false, password);
 
     serverStarted(false);
 
@@ -737,7 +754,7 @@ void MainWindow::connectedToServer(const QByteArray &hash)
 {
     QString str = QString("Do you trust this certificate?\nFingerprint: %0").arg(QString(hash));
 
-    int result = QMessageBox::question(this, "Accept?", str);
+    int result = msgBoxQuestion("Accept?", str, this);
 
     if (!m_audio_lib)
         return;
@@ -753,31 +770,46 @@ void MainWindow::connectedToServer(const QByteArray &hash)
 
     buttonconnecttopeer->setEnabled(true);
 
-    buttonstartweb->setText("Disconnect from server");
-
-    buttonstartweb->setEnabled(true);
+    buttonsigninweb->setText("Stop - Loggin In...");
 }
 
 void MainWindow::connectToPeer()
 {
-    QString id = QInputDialog::getText(this, "Set ID", "Select ID to connect:");
+    if (!m_audio_lib)
+        return;
 
-    if (!id.isEmpty())
-        m_audio_lib->connectToPeer(id);
+    if (!m_connecting_connected_to_peer)
+    {
+        QString id = QInputDialog::getText(this, "Connect to user", "Type the username to connect:");
+
+        if (!m_connecting_connected_to_peer && !id.isEmpty())
+        {
+            m_connecting_connected_to_peer = true;
+            buttonconnecttopeer->setText("Disconnect from user");
+
+            m_audio_lib->connectToPeer(id);
+        }
+    }
+    else
+    {
+        m_audio_lib->disconnectFromPeer();
+    }
 }
 
 void MainWindow::webClientConnected(const QHostAddress &address, const QString &id)
 {
-    m_peer = QString("%0 - %1").arg(QHostAddress(address.toIPv4Address()).toString()).arg(id);
+    Q_UNUSED(address)
+
+    m_peer = id;
+
+    m_connecting_connected_to_peer = true;
 
     QString title = QString("Connected to: %0 - %1").arg(m_peer).arg(TITLE);
 
     setWindowTitle(title);
 
-    buttonconnecttopeer->setEnabled(false);
-
-    buttonstartweb->setText("Disconnect from peer");
-    buttonstartweb->setEnabled(true);
+    buttonconnecttopeer->setText("Disconnect from user");
+    buttonsigninweb->setText("Disconnect from server");
 
     linechat->blockSignals(false);
     buttonsendchat->setEnabled(true);
@@ -794,6 +826,8 @@ void MainWindow::clientConnected(const QHostAddress &address, const QString &id)
         m_peer = QString("%0 - %1").arg(QHostAddress(address.toIPv4Address()).toString()).arg(id);
     else
         m_peer = QString("%0").arg(QHostAddress(address.toIPv4Address()).toString());
+
+    m_connecting_connected_to_peer = false;
 
     QString title = QString("Connected to: %0 - %1").arg(m_peer).arg(TITLE);
 
@@ -835,9 +869,6 @@ void MainWindow::serverConnected(const QHostAddress &address, const QString &id)
 
 void MainWindow::webClientDisconnected()
 {
-    if (m_audio_lib)
-        m_audio_lib->stop();
-
     stopRecord();
     resetRecordPage();
 
@@ -845,9 +876,11 @@ void MainWindow::webClientDisconnected()
 
     setWindowTitle(TITLE);
 
-    buttonconnecttopeer->setEnabled(false);
+    buttonconnecttopeer->setText("Connect to user");
 
     m_peer = QString();
+
+    m_connecting_connected_to_peer = false;
 }
 
 void MainWindow::clientDisconnected()
@@ -887,7 +920,7 @@ void MainWindow::pending(const QHostAddress &address, const QString &id)
     if (!id.isEmpty())
         str.append(QString("\nID: %0").arg(id));
 
-    int result = QMessageBox::question(this, "Pending connection", str);
+    int result = msgBoxQuestion("Pending connection", str, this);
 
     if (!m_audio_lib)
         return;
@@ -898,10 +931,32 @@ void MainWindow::pending(const QHostAddress &address, const QString &id)
         m_audio_lib->rejectConnection();
 }
 
+void MainWindow::webClientLoggedIn()
+{
+    buttonconnecttopeer->setEnabled(true);
+
+    buttonsigninweb->setText("Disconnect from server");
+}
+
+void MainWindow::webClientWarning(const QString &message)
+{
+    webClientDisconnected();
+
+    if (!message.isEmpty())
+    {
+        m_msgbox_visible = true;
+        msgBoxWarning("Message from server", message, this);
+        m_msgbox_visible = false;
+    }
+}
+
 void MainWindow::error(const QString &error)
 {
+    if (m_msgbox_visible)
+        return;
+
     if (!error.isEmpty())
-        QMessageBox::critical(this, "Error", error);
+        msgBoxCritical("Error", error, this);
 }
 
 void MainWindow::adjustSettings()
@@ -969,7 +1024,9 @@ void MainWindow::startPauseRecord()
             if (!m_audio_recorder->open())
             {
                 stopRecord();
-                QMessageBox::critical(this, "Error", "Error openning file for record!");
+
+                msgBoxCritical("Error", "Error openning file for record!", this);
+
                 return;
             }
         }
@@ -1042,7 +1099,7 @@ void MainWindow::writePeerToBuffer(const QByteArray &data)
 
 void MainWindow::mixLocalPeer()
 {
-    int size = AudioStreamingLibCore::timeToSize(10, m_audio_lib->audioFormat());
+    int size = int(AudioStreamingLibCore::timeToSize(10, m_audio_lib->audioFormat()));
 
     while (m_local_audio.size() >= size && m_peer_audio.size() >= size)
     {
@@ -1054,7 +1111,7 @@ void MainWindow::mixLocalPeer()
 
         m_audio_recorder->write(AudioStreamingLibCore::convertFloatToInt16(mixed));
 
-        qint64 recorded = AudioStreamingLibCore::sizeToTime(m_audio_recorder->size() - 44, m_format);
+        int recorded = int(AudioStreamingLibCore::sizeToTime(m_audio_recorder->size() - 44, m_format));
 
         QTime time = QTime(0, 0, 0).addMSecs(recorded);
 
@@ -1104,6 +1161,8 @@ void MainWindow::finished()
 
     boxautostart->setEnabled(true);
 
+    buttonconnecttopeer->setText("Connect to user");
+
     buttonconnecttopeer->setEnabled(false);
 
     webClientStarted(true);
@@ -1121,10 +1180,13 @@ void MainWindow::finished()
     buttonstartserver->setText("Start Server");
     buttonstartserver->setEnabled(true);
 
-    buttonstartweb->setText("Connect to server");
-    buttonstartweb->setEnabled(true);
+    buttonsigninweb->setText("Connect to server");
+
+    buttonsignupweb->setEnabled(true);
 
     m_peer = QString();
+
+    m_connecting_connected_to_peer = false;
 
     levelinput->setlevel(0);
     leveloutput->setlevel(0);
@@ -1152,7 +1214,7 @@ void MainWindow::getDevInfo()
     }
     else
     {
-        QMessageBox::warning(this, "Error", "No input device found!");
+        msgBoxWarning("Error", "No input device found!");
     }
 
     if (!outputdevices.isEmpty())
@@ -1162,6 +1224,6 @@ void MainWindow::getDevInfo()
     }
     else
     {
-        QMessageBox::warning(this, "Error", "No output device found!");
+        msgBoxWarning("Error", "No output device found!");
     }
 }

@@ -66,8 +66,6 @@ message("Using settings for Windows Visual Studio 32 bits")
 
 CONFIG += KNOWNDEVICE
 
-QMAKE_CXXFLAGS += /wd4482 #Supress typedef enum error
-QMAKE_CFLAGS += /wd4482 #Supress typedef enum error
 QMAKE_CXXFLAGS += /wd4267 #Supress loss of data error
 QMAKE_CFLAGS += /wd4267 #Supress loss of data error
 QMAKE_CXXFLAGS += /wd4244 #Supress loss of data error
@@ -111,8 +109,6 @@ message("Using settings for Windows Visual Studio 64 bits")
 
 CONFIG += KNOWNDEVICE
 
-QMAKE_CXXFLAGS += /wd4482 #Supress typedef enum error
-QMAKE_CFLAGS += /wd4482 #Supress typedef enum error
 QMAKE_CXXFLAGS += /wd4267 #Supress loss of data error
 QMAKE_CFLAGS += /wd4267 #Supress loss of data error
 QMAKE_CXXFLAGS += /wd4244 #Supress loss of data error

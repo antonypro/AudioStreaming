@@ -14,7 +14,7 @@ void DiscoverServer::listen(quint16 port, const QByteArray &negotiation_string, 
 {
     m_server = new QUdpSocket(this);
 
-    m_negotiation_string = negotiation_string.leftJustified(128, (char)0, true);
+    m_negotiation_string = negotiation_string.leftJustified(128, char(0), true);
     m_id = id;
 
     if (!m_server->bind(QHostAddress::AnyIPv4, port))
@@ -31,7 +31,7 @@ void DiscoverServer::readyRead()
     while (m_server->hasPendingDatagrams())
     {
         QByteArray data;
-        data.resize(m_server->pendingDatagramSize());
+        data.resize(int(m_server->pendingDatagramSize()));
 
         QHostAddress host;
         quint16 port;

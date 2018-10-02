@@ -61,7 +61,6 @@ struct default_packet_traits
     HasSqrt   = 0,
     HasRsqrt  = 0,
     HasExp    = 0,
-    HasExpm1  = 0,
     HasLog    = 0,
     HasLog1p  = 0,
     HasLog10  = 0,
@@ -299,7 +298,7 @@ template<typename Scalar, typename Packet> EIGEN_DEVICE_FUNC inline void pstoreu
 /** \internal tries to do cache prefetching of \a addr */
 template<typename Scalar> EIGEN_DEVICE_FUNC inline void prefetch(const Scalar* addr)
 {
-#ifdef EIGEN_CUDA_ARCH
+#ifdef __CUDA_ARCH__
 #if defined(__LP64__)
   // 64-bit pointer operand constraint for inlined asm
   asm(" prefetch.L1 [ %1 ];" : "=l"(addr) : "l"(addr));
@@ -324,13 +323,13 @@ preduxp(const Packet* vecs) { return vecs[0]; }
 template<typename Packet> EIGEN_DEVICE_FUNC inline typename unpacket_traits<Packet>::type predux(const Packet& a)
 { return a; }
 
-/** \internal \returns the sum of the elements of upper and lower half of \a a if \a a is larger than 4.
+/** \internal \returns the sum of the elements of \a a by block of 4 elements.
   * For a packet {a0, a1, a2, a3, a4, a5, a6, a7}, it returns a half packet {a0+a4, a1+a5, a2+a6, a3+a7}
   * For packet-size smaller or equal to 4, this boils down to a noop.
   */
 template<typename Packet> EIGEN_DEVICE_FUNC inline
 typename conditional<(unpacket_traits<Packet>::size%8)==0,typename unpacket_traits<Packet>::half,Packet>::type
-predux_half_dowto4(const Packet& a)
+predux_downto4(const Packet& a)
 { return a; }
 
 /** \internal \returns the product of the elements of \a a*/
@@ -401,10 +400,6 @@ Packet ptanh(const Packet& a) { using std::tanh; return tanh(a); }
 /** \internal \returns the exp of \a a (coeff-wise) */
 template<typename Packet> EIGEN_DECLARE_FUNCTION_ALLOWING_MULTIPLE_DEFINITIONS
 Packet pexp(const Packet& a) { using std::exp; return exp(a); }
-
-/** \internal \returns the expm1 of \a a (coeff-wise) */
-template<typename Packet> EIGEN_DECLARE_FUNCTION_ALLOWING_MULTIPLE_DEFINITIONS
-Packet pexpm1(const Packet& a) { return numext::expm1(a); }
 
 /** \internal \returns the log of \a a (coeff-wise) */
 template<typename Packet> EIGEN_DECLARE_FUNCTION_ALLOWING_MULTIPLE_DEFINITIONS
@@ -526,7 +521,7 @@ inline void palign(PacketType& first, const PacketType& second)
 ***************************************************************************/
 
 // Eigen+CUDA does not support complexes.
-#ifndef EIGEN_CUDACC
+#ifndef __CUDACC__
 
 template<> inline std::complex<float> pmul(const std::complex<float>& a, const std::complex<float>& b)
 { return std::complex<float>(real(a)*real(b) - imag(a)*imag(b), imag(a)*real(b) + real(a)*imag(b)); }

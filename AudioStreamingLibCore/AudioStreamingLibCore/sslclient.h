@@ -15,14 +15,18 @@ public:
 signals:
     void connectedToServer(QByteArray);
     void pending(quint32, QByteArray);
+    void webClientLoggedIn();
+    void webClientWarning(QString);
     void disconnected();
-    void connectionInfo(quint32, QByteArray, QByteArray);
-    void remotePort(quint16);
+    void connectedToPeer(QByteArray, QByteArray);
+    void disconnectedFromPeer();
+    void P2PData(QByteArray);
     void error(QString);
 
 public slots:
     void connectToHost(const QString &host, quint16 port);
     void stop();
+    void disconnectFromPeer();
     int write(const QByteArray &data);
 
 private slots:
@@ -33,6 +37,7 @@ private slots:
     void errorPrivate(QAbstractSocket::SocketError e);
     void readyReadPrivate();
     void processInput(const QByteArray &peer_data);
+    void alive();
 
 private:
     QSslSocket *m_socket;

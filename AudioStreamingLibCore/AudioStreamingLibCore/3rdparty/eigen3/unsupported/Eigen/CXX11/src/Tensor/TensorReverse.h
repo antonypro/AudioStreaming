@@ -31,7 +31,6 @@ struct traits<TensorReverseOp<ReverseDimensions,
   typedef typename remove_reference<Nested>::type _Nested;
   static const int NumDimensions = XprTraits::NumDimensions;
   static const int Layout = XprTraits::Layout;
-  typedef typename XprTraits::PointerType PointerType;
 };
 
 template<typename ReverseDimensions, typename XprType>
@@ -223,12 +222,7 @@ struct TensorEvaluator<const TensorReverseOp<ReverseDimensions, ArgType>, Device
            TensorOpCost(0, 0, compute_cost, false /* vectorized */, PacketSize);
   }
 
-  EIGEN_DEVICE_FUNC typename Eigen::internal::traits<XprType>::PointerType data() const { return NULL; }
-
-  /// required by sycl in order to extract the accessor
-  const TensorEvaluator<ArgType, Device> & impl() const { return m_impl; }
-  /// added for sycl in order to construct the buffer from sycl device
-  ReverseDimensions functor() const { return m_reverse; }
+  EIGEN_DEVICE_FUNC Scalar* data() const { return NULL; }
 
  protected:
   Dimensions m_dimensions;

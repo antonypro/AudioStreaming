@@ -35,7 +35,7 @@ void BarsWidget::calculate()
             continue;
 
         const float bandWidth = (highfrequency - lowfrequency) / barscount;
-        const int index = (value.frequency - lowfrequency) / bandWidth;
+        const int index = int((value.frequency - lowfrequency) / bandWidth);
 
         m_bars[index] = qMax(value.amplitude, m_bars[index]);
     }
@@ -62,7 +62,7 @@ void BarsWidget::paintEvent(QPaintEvent *event)
 
     calculate();
 
-    float w = qFloor(width() / float(barscount) - 1);
+    float w = float(qFloor(width() / qreal(barscount) - 1));
 
     float h = height();
 
@@ -70,12 +70,12 @@ void BarsWidget::paintEvent(QPaintEvent *event)
 
     painter.fillRect(rect(), Qt::black);
 
-    int pos = (width() - ((w + 1) * barscount)) / 2 + 1;
+    int pos = int(width() - ((w + 1) * barscount)) / 2 + 1;
 
     for (int i = 0; i < barscount; i++)
     {
         float value = m_bars[i];
-        painter.fillRect(pos, h - (value * h), w - 2, value * h, Qt::yellow);
+        painter.fillRect(pos, int(h - (value * h)), int(w - 2), int(value * h), Qt::yellow);
         pos += w + 1;
     }
 

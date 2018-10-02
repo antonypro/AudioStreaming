@@ -6,6 +6,7 @@
 #include "audiostreaminglibcore.h"
 #include "common.h"
 #include "levelmeter.h"
+#include "flowcontrol.h"
 
 class AudioOutput : public QObject
 {
@@ -52,10 +53,23 @@ private:
     float m_sample_align;
     int m_size_to_buffer;
     int m_time_to_buffer;
+    int m_last_size_to_buffer;
     int m_max_size_to_buffer;
     QAudioFormat m_format;
     QAudioFormat m_supported_format;
     LevelMeter *m_level_meter;
+
+#ifdef IS_TO_DEBUG
+    qint64 m_index;
+#endif
+
+    //Smart buffer
+    QElapsedTimer m_smart_buffer_timer;
+    bool m_smart_buffer_enabled;
+    bool m_smart_buffer_test_active;
+    int m_bytes;
+    int m_smart_bufer_min_size;
+    int m_bytes_read;
 };
 
 #endif // AUDIOOUTPUT_H

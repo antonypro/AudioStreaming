@@ -13,7 +13,7 @@
 
 #define EIGEN_WORLD_VERSION 3
 #define EIGEN_MAJOR_VERSION 3
-#define EIGEN_MINOR_VERSION 90
+#define EIGEN_MINOR_VERSION 5
 
 #define EIGEN_VERSION_AT_LEAST(x,y,z) (EIGEN_WORLD_VERSION>x || (EIGEN_WORLD_VERSION>=x && \
                                       (EIGEN_MAJOR_VERSION>y || (EIGEN_MAJOR_VERSION>=y && \
@@ -23,7 +23,7 @@
 
 /// \internal EIGEN_COMP_GNUC set to 1 for all compilers compatible with GCC
 #ifdef __GNUC__
-  #define EIGEN_COMP_GNUC (__GNUC__*10+__GNUC_MINOR__)
+  #define EIGEN_COMP_GNUC 1
 #else
   #define EIGEN_COMP_GNUC 0
 #endif
@@ -73,17 +73,12 @@
 
 // For the record, here is a table summarizing the possible values for EIGEN_COMP_MSVC:
 //  name  ver   MSC_VER
-//  2008         9      1500
-//  2010        10      1600
-//  2012        11      1700
-//  2013        12      1800
-//  2015        14      1900
-//  "15"        15      1900
-//  2017-14.1   15.0    1910
-//  2017-14.11  15.3    1911
-//  2017-14.12  15.5    1912
-//  2017-14.13  15.6    1913
-//  2017-14.14  15.7    1914
+//  2008    9      1500
+//  2010   10      1600
+//  2012   11      1700
+//  2013   12      1800
+//  2015   14      1900
+//  "15"   15      1900
 
 /// \internal EIGEN_COMP_MSVC_STRICT set to 1 if the compiler is really Microsoft Visual C++ and not ,e.g., ICC or clang-cl
 #if EIGEN_COMP_MSVC && !(EIGEN_COMP_ICC || EIGEN_COMP_LLVM || EIGEN_COMP_CLANG)
@@ -354,14 +349,6 @@
 # define __has_feature(x) 0
 #endif
 
-// Some old compilers do not support template specializations like:
-// template<typename T,int N> void foo(const T x[N]);
-#if !( EIGEN_COMP_CLANG && ((EIGEN_COMP_CLANG<309) || defined(__apple_build_version__)) || EIGEN_COMP_GNUC_STRICT && EIGEN_COMP_GNUC<49)
-#define EIGEN_HAS_STATIC_ARRAY_TEMPLATE 1
-#else
-#define EIGEN_HAS_STATIC_ARRAY_TEMPLATE 0
-#endif
-
 // Upperbound on the C++ version to use.
 // Expected values are 03, 11, 14, 17, etc.
 // By default, let's use an arbitrarily large C++ version.
@@ -375,11 +362,6 @@
 #define EIGEN_HAS_CXX11 0
 #endif
 
-#if EIGEN_MAX_CPP_VER>=14 && (defined(__cplusplus) && (__cplusplus > 201103L) || EIGEN_COMP_MSVC >= 1910)
-#define EIGEN_HAS_CXX14 1
-#else
-#define EIGEN_HAS_CXX14 0
-#endif
 
 // Do we support r-value references?
 #ifndef EIGEN_HAS_RVALUE_REFERENCES
@@ -398,8 +380,7 @@
 #if EIGEN_MAX_CPP_VER>=11 && \
     ((defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 199901))       \
   || (defined(__GNUC__) && defined(_GLIBCXX_USE_C99)) \
-  || (defined(_LIBCPP_VERSION) && !defined(_MSC_VER)) \
-  || (EIGEN_COMP_MSVC >= 1900) || defined(__SYCL_DEVICE_ONLY__))
+  || (defined(_LIBCPP_VERSION) && !defined(_MSC_VER)))
   #define EIGEN_HAS_C99_MATH 1
 #else
   #define EIGEN_HAS_C99_MATH 0
@@ -415,24 +396,12 @@
 #endif
 #endif
 
-// Does the compiler support type_trais?
-#ifndef EIGEN_HAS_TYPE_TRAITS
-#if EIGEN_MAX_CPP_VER>=11 && (EIGEN_HAS_CXX11 || EIGEN_COMP_MSVC >= 1700)
-#define EIGEN_HAS_TYPE_TRAITS 1
-#define EIGEN_INCLUDE_TYPE_TRAITS
-#else
-#define EIGEN_HAS_TYPE_TRAITS 0
-#endif
-#endif
-
 // Does the compiler support variadic templates?
 #ifndef EIGEN_HAS_VARIADIC_TEMPLATES
 #if EIGEN_MAX_CPP_VER>=11 && (__cplusplus > 199711L || EIGEN_COMP_MSVC >= 1900) \
   && (!defined(__NVCC__) || !EIGEN_ARCH_ARM_OR_ARM64 || (EIGEN_CUDACC_VER >= 80000) )
     // ^^ Disable the use of variadic templates when compiling with versions of nvcc older than 8.0 on ARM devices:
     //    this prevents nvcc from crashing when compiling Eigen on Tegra X1
-#define EIGEN_HAS_VARIADIC_TEMPLATES 1
-#elif  EIGEN_MAX_CPP_VER>=11 && (__cplusplus > 199711L || EIGEN_COMP_MSVC >= 1900) && defined(__SYCL_DEVICE_ONLY__)
 #define EIGEN_HAS_VARIADIC_TEMPLATES 1
 #else
 #define EIGEN_HAS_VARIADIC_TEMPLATES 0
@@ -442,14 +411,13 @@
 // Does the compiler fully support const expressions? (as in c++14)
 #ifndef EIGEN_HAS_CONSTEXPR
 
-#if defined(EIGEN_CUDACC)
+#ifdef __CUDACC__
 // Const expressions are supported provided that c++11 is enabled and we're using either clang or nvcc 7.5 or above
 #if EIGEN_MAX_CPP_VER>=14 && (__cplusplus > 199711L && (EIGEN_COMP_CLANG || EIGEN_CUDACC_VER >= 70500))
   #define EIGEN_HAS_CONSTEXPR 1
 #endif
 #elif EIGEN_MAX_CPP_VER>=14 && (__has_feature(cxx_relaxed_constexpr) || (defined(__cplusplus) && __cplusplus >= 201402L) || \
-  (EIGEN_GNUC_AT_LEAST(4,8) && (__cplusplus > 199711L)) || \
-  (EIGEN_COMP_CLANG >= 306 && (__cplusplus > 199711L)))
+  (EIGEN_GNUC_AT_LEAST(4,8) && (__cplusplus > 199711L)))
 #define EIGEN_HAS_CONSTEXPR 1
 #endif
 
@@ -559,8 +527,8 @@
 //  - static is not very good because it prevents definitions from different object files to be merged.
 //           So static causes the resulting linked executable to be bloated with multiple copies of the same function.
 //  - inline is not perfect either as it unwantedly hints the compiler toward inlining the function.
-#define EIGEN_DECLARE_FUNCTION_ALLOWING_MULTIPLE_DEFINITIONS EIGEN_DEVICE_FUNC
-#define EIGEN_DEFINE_FUNCTION_ALLOWING_MULTIPLE_DEFINITIONS EIGEN_DEVICE_FUNC inline
+#define EIGEN_DECLARE_FUNCTION_ALLOWING_MULTIPLE_DEFINITIONS
+#define EIGEN_DEFINE_FUNCTION_ALLOWING_MULTIPLE_DEFINITIONS inline
 
 #ifdef NDEBUG
 # ifndef EIGEN_NO_DEBUG
@@ -658,14 +626,6 @@ namespace Eigen {
 #endif
 
 
-#if EIGEN_COMP_MSVC
-  // NOTE MSVC often gives C4127 warnings with compiletime if statements. See bug 1362.
-  // This workaround is ugly, but it does the job.
-#  define EIGEN_CONST_CONDITIONAL(cond)  (void)0, cond
-#else
-#  define EIGEN_CONST_CONDITIONAL(cond)  cond
-#endif
-
 //------------------------------------------------------------------------------------------
 // Static and dynamic alignment control
 //
@@ -686,7 +646,7 @@ namespace Eigen {
  * If we made alignment depend on whether or not EIGEN_VECTORIZE is defined, it would be impossible to link
  * vectorized and non-vectorized code.
  */
-#if (defined EIGEN_CUDACC)
+#if (defined __CUDACC__)
   #define EIGEN_ALIGN_TO_BOUNDARY(n) __align__(n)
 #elif EIGEN_COMP_GNUC || EIGEN_COMP_PGI || EIGEN_COMP_IBM || EIGEN_COMP_ARM
   #define EIGEN_ALIGN_TO_BOUNDARY(n) __attribute__((aligned(n)))
@@ -703,10 +663,10 @@ namespace Eigen {
 #if defined(EIGEN_DONT_VECTORIZE)
   #define EIGEN_IDEAL_MAX_ALIGN_BYTES 0
 #elif defined(EIGEN_VECTORIZE_AVX512)
-  // 64 bytes static alignment is preferred only if really required
+  // 64 bytes static alignmeent is preferred only if really required
   #define EIGEN_IDEAL_MAX_ALIGN_BYTES 64
 #elif defined(__AVX__)
-  // 32 bytes static alignment is preferred only if really required
+  // 32 bytes static alignmeent is preferred only if really required
   #define EIGEN_IDEAL_MAX_ALIGN_BYTES 32
 #else
   #define EIGEN_IDEAL_MAX_ALIGN_BYTES 16
@@ -724,7 +684,7 @@ namespace Eigen {
 #error EIGEN_MAX_STATIC_ALIGN_BYTES and EIGEN_DONT_ALIGN[_STATICALLY] are both defined with EIGEN_MAX_STATIC_ALIGN_BYTES!=0. Use EIGEN_MAX_STATIC_ALIGN_BYTES=0 as a synonym of EIGEN_DONT_ALIGN_STATICALLY.
 #endif
 
-// EIGEN_DONT_ALIGN_STATICALLY and EIGEN_DONT_ALIGN are deprecated
+// EIGEN_DONT_ALIGN_STATICALLY and EIGEN_DONT_ALIGN are deprectated
 // They imply EIGEN_MAX_STATIC_ALIGN_BYTES=0
 #if defined(EIGEN_DONT_ALIGN_STATICALLY) || defined(EIGEN_DONT_ALIGN)
   #ifdef EIGEN_MAX_STATIC_ALIGN_BYTES
@@ -783,7 +743,7 @@ namespace Eigen {
 #endif
 
 // At this stage, EIGEN_MAX_STATIC_ALIGN_BYTES>0 is the true test whether we want to align arrays on the stack or not.
-// It takes into account both the user choice to explicitly enable/disable alignment (by setting EIGEN_MAX_STATIC_ALIGN_BYTES)
+// It takes into account both the user choice to explicitly enable/disable alignment (by settting EIGEN_MAX_STATIC_ALIGN_BYTES)
 // and the architecture config (EIGEN_ARCH_WANTS_STACK_ALIGNMENT).
 // Henceforth, only EIGEN_MAX_STATIC_ALIGN_BYTES should be used.
 
@@ -896,8 +856,7 @@ namespace Eigen {
   typedef typename Eigen::internal::ref_selector<Derived>::type Nested; \
   typedef typename Eigen::internal::traits<Derived>::StorageKind StorageKind; \
   typedef typename Eigen::internal::traits<Derived>::StorageIndex StorageIndex; \
-  enum CompileTimeTraits \
-      { RowsAtCompileTime = Eigen::internal::traits<Derived>::RowsAtCompileTime, \
+  enum { RowsAtCompileTime = Eigen::internal::traits<Derived>::RowsAtCompileTime, \
         ColsAtCompileTime = Eigen::internal::traits<Derived>::ColsAtCompileTime, \
         Flags = Eigen::internal::traits<Derived>::Flags, \
         SizeAtCompileTime = Base::SizeAtCompileTime, \
@@ -973,7 +932,7 @@ namespace Eigen {
                 const typename internal::plain_constant_type<EXPR,SCALAR>::type, const EXPR>
 
 // Workaround for MSVC 2010 (see ML thread "patch with compile for for MSVC 2010")
-#if EIGEN_COMP_MSVC_STRICT && (EIGEN_COMP_MSVC_STRICT<=1600)
+#if EIGEN_COMP_MSVC_STRICT<=1600
 #define EIGEN_MSVC10_WORKAROUND_BINARYOP_RETURN_TYPE(X) typename internal::enable_if<true,X>::type
 #else
 #define EIGEN_MSVC10_WORKAROUND_BINARYOP_RETURN_TYPE(X) X
@@ -1008,7 +967,7 @@ namespace Eigen {
 #  define EIGEN_TRY try
 #  define EIGEN_CATCH(X) catch (X)
 #else
-#  ifdef EIGEN_CUDA_ARCH
+#  ifdef __CUDA_ARCH__
 #    define EIGEN_THROW_X(X) asm("trap;")
 #    define EIGEN_THROW asm("trap;")
 #  else
@@ -1030,7 +989,13 @@ namespace Eigen {
 #   define EIGEN_NOEXCEPT
 #   define EIGEN_NOEXCEPT_IF(x)
 #   define EIGEN_NO_THROW throw()
-#   define EIGEN_EXCEPTION_SPEC(X) throw(X)
+#   if EIGEN_COMP_MSVC
+      // MSVC does not support exception specifications (warning C4290),
+      // and they are deprecated in c++11 anyway.
+#     define EIGEN_EXCEPTION_SPEC(X) throw()
+#   else
+#     define EIGEN_EXCEPTION_SPEC(X) throw(X)
+#   endif
 #endif
 
 #endif // EIGEN_MACROS_H

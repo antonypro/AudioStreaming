@@ -43,6 +43,8 @@ void AudioInput::startPrivate(const QAudioDeviceInfo &devinfo,
     //Initialize the audio input device
     m_audio_input = new QAudioInput(devinfo, m_supported_format, this);
 
+    SETTONULLPTR(m_audio_input);
+
     m_device = m_audio_input->start();
 
     if (!m_device)
@@ -50,6 +52,8 @@ void AudioInput::startPrivate(const QAudioDeviceInfo &devinfo,
         emit error("Failed to open input audio device");
         return;
     }
+
+    SETTONULLPTR(m_device);
 
     //Call the readyReadPrivate function when data are available in the input device
     connect(m_device, &QIODevice::readyRead, this, &AudioInput::readyReadPrivate);

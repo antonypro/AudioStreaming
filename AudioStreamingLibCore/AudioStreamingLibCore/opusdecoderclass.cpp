@@ -14,6 +14,8 @@ OpusDecoderClass::~OpusDecoderClass()
     if (!m_initialized)
         return;
 
+    m_initialized = false;
+
     /*Destroy the encoder state*/
     opus_decoder_destroy(m_decoder);
 }
@@ -26,7 +28,7 @@ void OpusDecoderClass::startPrivate(int sample_rate, int channels, int frame_siz
     /* Create a new decoder state. */
     int err;
     m_decoder = opus_decoder_create(sample_rate, channels, &err);
-    if (err<0)
+    if (err < 0)
     {
         emit error(QString("Failed to create Opus decoder: %0").arg(opus_strerror(err)));
         return;
@@ -59,9 +61,9 @@ void OpusDecoderClass::writePrivate(const QByteArray &data)
          be the case for all encoders, so the decoder must always check
          the frame size returned. */
 
-    QByteArray output = QByteArray(sizeof(float) * m_channels * m_frame_size, (char)0);
+    QByteArray output = QByteArray(int(sizeof(float)) * m_channels * m_frame_size, char(0));
 
-    frame_size = opus_decode_float(m_decoder, (const uchar*)data.constData(), data.size(), (float*)output.data(), m_max_frame_size, 0);
+    frame_size = opus_decode_float(m_decoder, reinterpret_cast<const uchar*>(data.constData()), data.size(), reinterpret_cast<float*>(output.data()), m_max_frame_size, 0);
 
     if (frame_size < 0)
     {
@@ -69,7 +71,7 @@ void OpusDecoderClass::writePrivate(const QByteArray &data)
         return;
     }
 
-    int size = sizeof(float) * m_channels * frame_size;
+    int size = int(sizeof(float)) * m_channels * frame_size;
 
     /* Write the decoded audio to output. */
     output.resize(size);

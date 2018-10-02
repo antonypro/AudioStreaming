@@ -24,14 +24,16 @@ void Client::abort()
 void Client::connectToHost(const QString &host, quint16 port,
                            const QByteArray &negotiation_string,
                            const QString &id,
-                           const QByteArray &password)
+                           const QByteArray &password,
+                           bool new_user)
 {
     Q_UNUSED(password)
+    Q_UNUSED(new_user)
 
     if (m_socket)
         return;
 
-    m_negotiation_string = negotiation_string.leftJustified(128, (char)0, true);
+    m_negotiation_string = negotiation_string.leftJustified(128, char(0), true);
     m_id = id;
 
     m_socket = new QTcpSocket(this);
@@ -43,7 +45,7 @@ void Client::connectToHost(const QString &host, quint16 port,
 
     connect(m_socket, &QTcpSocket::readyRead, this, &Client::readID);
 
-    m_timer->start(10 * 1000);
+    m_timer->start(TIMEOUT);
 
     m_socket->connectToHost(host, port);
 }
@@ -51,6 +53,11 @@ void Client::connectToHost(const QString &host, quint16 port,
 void Client::connectToPeer(const QString &peer_id)
 {
     Q_UNUSED(peer_id)
+}
+
+void Client::disconnectFromPeer()
+{
+
 }
 
 void Client::acceptSslCertificate()

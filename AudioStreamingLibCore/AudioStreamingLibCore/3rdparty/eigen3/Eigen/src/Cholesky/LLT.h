@@ -180,7 +180,7 @@ template<typename _MatrixType, int _UpLo> class LLT
 
     /** \brief Reports whether previous computation was successful.
       *
-      * \returns \c Success if computation was successful,
+      * \returns \c Success if computation was succesful,
       *          \c NumericalIssue if the matrix.appears not to be positive definite.
       */
     ComputationInfo info() const
@@ -204,6 +204,7 @@ template<typename _MatrixType, int _UpLo> class LLT
 
     #ifndef EIGEN_PARSED_BY_DOXYGEN
     template<typename RhsType, typename DstType>
+    EIGEN_DEVICE_FUNC
     void _solve_impl(const RhsType &rhs, DstType &dst) const;
     #endif
 

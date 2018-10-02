@@ -35,7 +35,7 @@ private:
     CFixedBuffer<double> *m_InBufs;
     CPtrKeeper<CDSPResampler24*> *m_Resamps;
     double **m_opp;
-    bool m_initalized;
+    bool m_initialized;
 };
 
 #endif // R8BRAIN_H

@@ -18,16 +18,6 @@ enum {
   Small = 3
 };
 
-// Define the threshold value to fallback from the generic matrix-matrix product
-// implementation (heavy) to the lightweight coeff-based product one.
-// See generic_product_impl<Lhs,Rhs,DenseShape,DenseShape,GemmProduct>
-// in products/GeneralMatrixMatrix.h for more details.
-// TODO This threshold should also be used in the compile-time selector below.
-#ifndef EIGEN_GEMM_TO_COEFFBASED_THRESHOLD
-// This default value has been obtained on a Haswell architecture.
-#define EIGEN_GEMM_TO_COEFFBASED_THRESHOLD 20
-#endif
-
 namespace internal {
 
 template<int Rows, int Cols, int Depth> struct product_type_selector;
@@ -396,7 +386,6 @@ template<> struct gemv_dense_selector<OnTheRight,RowMajor,false>
   */
 template<typename Derived>
 template<typename OtherDerived>
-EIGEN_DEVICE_FUNC
 inline const Product<Derived, OtherDerived>
 MatrixBase<Derived>::operator*(const MatrixBase<OtherDerived> &other) const
 {
@@ -440,7 +429,7 @@ MatrixBase<Derived>::operator*(const MatrixBase<OtherDerived> &other) const
 template<typename Derived>
 template<typename OtherDerived>
 const Product<Derived,OtherDerived,LazyProduct>
-EIGEN_DEVICE_FUNC MatrixBase<Derived>::lazyProduct(const MatrixBase<OtherDerived> &other) const
+MatrixBase<Derived>::lazyProduct(const MatrixBase<OtherDerived> &other) const
 {
   enum {
     ProductIsValid =  Derived::ColsAtCompileTime==Dynamic
