@@ -3,11 +3,8 @@
 WebClient::WebClient(QObject *parent) : AbstractClient(parent)
 {
     m_ssl_certificate_accepted = false;
-    m_openssl = nullptr;
-    m_ssl_client = nullptr;
 
     m_openssl = new OpenSslLib(this);
-    SETTONULLPTR(m_openssl);
 }
 
 WebClient::~WebClient()
@@ -31,10 +28,11 @@ bool WebClient::testSsl()
 void WebClient::connectToHost(const QString &host, quint16 port,
                               const QByteArray &negotiation_string,
                               const QString &id,
-                              const QByteArray &password,
-                              bool new_user)
+                              const QByteArray &password)
 {
-    Q_UNUSED(new_user)
+    Q_UNUSED(negotiation_string)
+    Q_UNUSED(id)
+    Q_UNUSED(password)
 
     if (!testSsl())
         return;
@@ -43,7 +41,6 @@ void WebClient::connectToHost(const QString &host, quint16 port,
         return;
 
     m_ssl_client = new SslClient(this);
-    SETTONULLPTR(m_ssl_client);
 
     connect(m_ssl_client, &SslClient::connectedToServer, this, &WebClient::connectedToServerPrivate);
     connect(m_ssl_client, &SslClient::disconnected, this, &WebClient::disconnectedFromServer);
@@ -53,17 +50,22 @@ void WebClient::connectToHost(const QString &host, quint16 port,
     connect(m_ssl_client, &SslClient::connectedToPeer, this, &WebClient::connectedToPeerPrivate);
     connect(m_ssl_client, &SslClient::disconnectedFromPeer, this, &WebClient::disconnectedFromPeerPrivate);
     connect(m_ssl_client, &SslClient::webClientWarning, this, &WebClient::webClientWarning);
+    connect(m_ssl_client, &SslClient::commandXML, this, &WebClient::commandXML);
     connect(m_ssl_client, &SslClient::error, this, &WebClient::error);
 
-    m_negotiation_string = negotiation_string.leftJustified(128, char(0), true);
-
-    m_id = cleanString(id);
-
-    m_password = cleanString(QLatin1String(password)).toLatin1();
-
-    m_new_user = new_user;
-
     m_ssl_client->connectToHost(host, port);
+}
+
+void WebClient::writeCommandXML(const QByteArray &XML)
+{
+    if (!m_ssl_client || !m_ssl_certificate_accepted)
+        return;
+
+    QByteArray data;
+    data.append(getBytes<quint8>(ServerCommand::XML));
+    data.append(XML);
+
+    m_ssl_client->write(data);
 }
 
 void WebClient::connectedToServerPrivate(const QByteArray &hash)
@@ -83,15 +85,6 @@ void WebClient::disconnectedFromServer()
 void WebClient::acceptSslCertificate()
 {
     m_ssl_certificate_accepted = true;
-
-    QByteArray data;
-    data.append(getBytes<quint8>(ServerCommand::PeerInfo));
-    data.append(m_negotiation_string);
-    data.append(m_id.toLatin1().leftJustified(20, char(0), false));
-    data.append(m_password.leftJustified(64, char(0), false));
-    data.append(getBytes<bool>(m_new_user));
-
-    m_ssl_client->write(data);
 }
 
 void WebClient::connectToPeer(const QString &peer_id)

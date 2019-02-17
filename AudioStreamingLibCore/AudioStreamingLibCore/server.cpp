@@ -4,8 +4,6 @@ Server::Server(QObject *parent) : AbstractServer(parent)
 {
     m_max_connections = 0;
     m_auto_accept = false;
-    m_server = nullptr;
-    m_pending_socket = nullptr;
 }
 
 Server::~Server()
@@ -36,8 +34,6 @@ void Server::listen(quint16 port, bool auto_accept, int max_connections,
     m_id = id;
 
     m_server = new TcpServer(this);
-
-    SETTONULLPTR(m_server);
 
     m_max_connections = max_connections;
 
@@ -218,7 +214,7 @@ void Server::writeToHost(const QByteArray &data, qintptr descriptor)
 
 int Server::writeToAll(const QByteArray &data)
 {
-    foreach (QTcpSocket *socket, m_socket_list)
+    for (QTcpSocket *socket : m_socket_list)
     {
         socket->write(getBytes<qint32>(data.size()));
         socket->write(data);

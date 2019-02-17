@@ -18,7 +18,7 @@ Qt 5.x
 
 C++11 compiler.
 
-You can choose to compress audio with Opus codec or not. If choose to compress you'll need to compile [Opus](https://www.opus-codec.org/) to your targets(Windows, Linux, macOS or Android), and need to download [r8brain](https://github.com/avaneev/r8brain-free-src). To compile Opus for android see the opus-android README.
+You can choose to compress audio with Opus codec or not. If choose to compress you'll need to compile [Opus](https://www.opus-codec.org/) to your targets, and need to download [r8brain](https://github.com/avaneev/r8brain-free-src). To compile Opus for Android see the opus-android README.
 
 If you want to static link [OpenSsl](https://www.openssl.org/),(independently if generating a shared or static library) just compile OpenSsl to fit your needs.
 
@@ -30,30 +30,22 @@ If not compressing audio and not directly dealing with OpenSsl the only requirem
 
 To compile the library you need to choose if you want to compress audio using Opus codec or not, and if you want to static link OpenSsl or not.
 
-If you want to use Opus edit AudioStreamingLibSettings.pri setting `OPUS_ENABLED = TRUE`, with the appropriated version of Opus compiled just set the include folder of r8brain and Opus, and the Opus libraries location in AudioStreamingLibSettings.pri. If you don't want to use Opus leave `OPUS_ENABLED` blank or with any other value than `TRUE`.
+If you want to use Opus edit AudioStreamingLibSettings.pri setting `OPUS_ENABLED = TRUE`, with the appropriated version of Opus compiled, set the include folder of r8brain and Opus, and the Opus libraries location in AudioStreamingLibSettings.pri. If you don't want to use Opus leave `OPUS_ENABLED` blank or with any other value than `TRUE`.
 
 The same applies to OpenSsl, if you want to static link OpenSsl set `OPENSSL_ENABLED = TRUE`.(Please not that even if OpenSsl won't be statically linked it may be available through dynamic linking at runtime.)
-With the appropriated version of OpenSsl compiled just set the include folder and the libraries location of OpenSsl in AudioStreamingLibSettings.pri.
+With the appropriated version of OpenSsl compiled, set the include folder and the libraries location of OpenSsl in AudioStreamingLibSettings.pri.
 
 With the appropriate settings set (using Opus or not, static linking OpenSsl or not) build the buildlib.pro, if it's already built and you are changing settings remember to re-run qmake and rebuild.
 
 #### Qbs:
 
-Compile with `Qbs` is simpler than with `QMake`, you'll still need to choose compress audio, statically links `OpenSsl`, and set this on the.`qbs` file as a property. 
-
-Different from `QMake`, there is no two build steps, build each application causes the library to be built together.
-
-Please note that Android builds are not currently compatible with `Qbs`.
+Due to deprecation of Qbs, this build system have been removed from this library.
 
 ### Using the library:
 
 #### QMake:
 
 Using the library with `QMake` is easy, just add `include(path/to/AudioStreamingLib.pri)` to your project file.
-
-#### Qbs:
-
-Add to your `.qbs` file: `references: ["..path_to../AudioStreamingLibCore/AudioStreamingLibCore/AudioStreamingLibCore.qbs"]`
 
 #### Coding:
 
@@ -77,10 +69,14 @@ The smart buffer is activated when the time to buffer is 0. It works on `AudioOu
 
 [Eigen](http://eigen.tuxfamily.org/)
 
-[Opus](http://opus-codec.org/)
+[Opus](https://opus-codec.org/)
 
 [r8brain](https://github.com/avaneev/r8brain-free-src)
 
 [OpenSsl](https://www.openssl.org/)
 
 [Kiss FFT](http://kissfft.sourceforge.net/)
+
+[FFMPEG](https://www.ffmpeg.org/)
+
+[LAME](http://lame.sourceforge.net/)

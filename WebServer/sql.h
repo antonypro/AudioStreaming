@@ -19,6 +19,8 @@ public slots:
     bool createUser(const QString &user, const QString &password);
     bool loginUser(const QString &user, const QString &password);
     bool userExists(const QString &user);
+    bool deleteUser(const QString &user);
+    bool changePassword(const QString &user, const QString &password);
 
 private:
     QSqlDatabase m_db;

@@ -29,6 +29,8 @@ SOURCES +=  $$PWD/audiostreaminglibcore.cpp \
 
 HEADERS +=  $$PWD/audiostreaminglibcore.h \
             $$PWD/audiostreamingworker.h \
+            $$PWD/common.h \
+            $$PWD/audiocommon.h \
             $$PWD/discoverserver.h \
             $$PWD/discoverclient.h \
             $$PWD/abstractclient.h \
@@ -44,7 +46,6 @@ HEADERS +=  $$PWD/audiostreaminglibcore.h \
             $$PWD/audioinput.h \
             $$PWD/audiooutput.h \
             $$PWD/flowcontrol.h \
-            $$PWD/common.h \
             $$PWD/levelmeter.h
 
 WITH_OPUS {
@@ -58,33 +59,27 @@ HEADERS +=  $$PWD/opusencoderclass.h \
             $$PWD/opusdecoderclass.h \
             $$PWD/r8brain.h
 
-win32{
+KNOWNDEVICE:win32{
 INCLUDEPATH += $$WIN_R8BRAIN_RESAMPLER_INCLUDE
 SOURCES += $$WIN_R8BRAIN_RESAMPLER_INCLUDE/r8bbase.cpp
 }
-android{
+KNOWNDEVICE:android{
 INCLUDEPATH += $$ANDROID_R8BRAIN_RESAMPLER_INCLUDE
 SOURCES += $$ANDROID_R8BRAIN_RESAMPLER_INCLUDE/r8bbase.cpp
 }
-unix:!macx:!android{
+KNOWNDEVICE:unix:!macx:!android{
 INCLUDEPATH += $$LINUX_R8BRAIN_RESAMPLER_INCLUDE
 SOURCES += $$LINUX_R8BRAIN_RESAMPLER_INCLUDE/r8bbase.cpp
 }
-macx{
+KNOWNDEVICE:macx{
 INCLUDEPATH += $$MACOS_R8BRAIN_RESAMPLER_INCLUDE
 SOURCES += $$MACOS_R8BRAIN_RESAMPLER_INCLUDE/r8bbase.cpp
 }
+!KNOWNDEVICE{
+INCLUDEPATH += $$UNKNOWN_R8BRAIN_RESAMPLER_INCLUDE
+SOURCES += $$UNKNOWN_R8BRAIN_RESAMPLER_INCLUDE/r8bbase.cpp
 }
-
-#Copy header files
-
-copyfile1.commands = $(COPY_FILE) $$system_path($$PWD/AudioStreamingLibCore) $$system_path($$PWD/../include)
-copyfile2.commands = $(COPY_FILE) $$system_path($$PWD/audiostreaminglibcore.h) $$system_path($$PWD/../include)
-copyfile3.commands = $(COPY_FILE) $$system_path($$PWD/discoverclient.h) $$system_path($$PWD/../include)
-
-first.depends = $(first) copyfile1 copyfile2 copyfile3
-
-QMAKE_EXTRA_TARGETS += first copyfile1 copyfile2 copyfile3
+}
 
 #Set output directory
 

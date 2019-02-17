@@ -2,7 +2,7 @@
 
 DiscoverServer::DiscoverServer(QObject *parent) : QObject(parent)
 {
-    m_server = nullptr;
+
 }
 
 DiscoverServer::~DiscoverServer()

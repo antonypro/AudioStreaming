@@ -29,6 +29,7 @@ public:
         m_opus_bitrate = 128 * 1000;
         m_callback_enabled = false;
         m_is_get_audio_enabled = false;
+        m_listen_audio_input_enabled = false;
         m_encryption_enabled = false;
     }
 
@@ -100,6 +101,10 @@ public:
     {
         return m_is_get_audio_enabled;
     }
+    bool isListenAudioInputEnabled()
+    {
+        return m_listen_audio_input_enabled;
+    }
     bool isEncryptionEnabled()
     {
         return m_encryption_enabled;
@@ -161,6 +166,10 @@ public:
     {
         m_is_get_audio_enabled = enable;
     }
+    void setListenAudioInputEnabled(bool enable)
+    {
+        m_listen_audio_input_enabled = enable;
+    }
     void setEncryptionEnabled(bool enable)
     {
         m_encryption_enabled = enable;
@@ -180,13 +189,14 @@ private:
     int m_opus_bitrate;
     bool m_callback_enabled;
     bool m_is_get_audio_enabled;
+    bool m_listen_audio_input_enabled;
     bool m_encryption_enabled;
 };
 
-QDataStream &operator<<(QDataStream &stream, StreamingInfo &info);
-QDataStream &operator>>(QDataStream &stream, StreamingInfo &info);
+inline QDataStream &operator<<(QDataStream &stream, StreamingInfo &info);
+inline QDataStream &operator>>(QDataStream &stream, StreamingInfo &info);
 
-QDebug operator<<(QDebug debug, StreamingInfo info);
+inline QDebug &operator<<(QDebug &debug, StreamingInfo &info);
 
 class AudioStreamingLibCore : public QObject
 {
@@ -205,6 +215,8 @@ public:
 
     static QByteArray mixFloatAudio(const QByteArray &data1, const QByteArray &data2);
 
+    static QString EigenInstructionsSet();
+
 signals:
     void connected(QHostAddress,QString);
     void connectedToServer(QByteArray);
@@ -222,6 +234,7 @@ signals:
     void adjustSettings();
     void extraDataWritten();
     void finished();
+    void commandXML(QByteArray);
     void error(QString);
 
 public slots:
@@ -230,12 +243,13 @@ public slots:
     bool isRunning();
     DiscoverClient *discoverInstance();
     void listen(quint16 port, bool auto_accept = true, const QByteArray &password = QByteArray(), int max_connections = 30);
-    void connectToHost(const QString &host, quint16 port, const QByteArray &password = QByteArray(), bool new_user = false);
+    void connectToHost(const QString &host, quint16 port, const QByteArray &password = QByteArray());
+    void writeCommandXML(const QByteArray &XML);
     void connectToPeer(const QString &ID);
     void disconnectFromPeer();
-    void acceptSslCertificate();
     void acceptConnection();
     void rejectConnection();
+    void acceptSslCertificate();
     void writeExtraData(const QByteArray &data);
     void writeExtraDataResult();
     void inputDataBack(const QByteArray &data);
@@ -250,16 +264,12 @@ public slots:
     QAudioFormat audioFormat();
     QAudioFormat inputAudioFormat();
 
-private slots:
-    void finishedPrivate();
-
 private:
     bool m_input_muted;
     int m_volume;
     AudioStreamingWorker *m_worker;
-    DiscoverClient *m_client_discover;
+    QPointer<DiscoverClient> m_client_discover;
     bool m_running;
-    bool m_delete_pending;
     QAudioFormat m_audio_format;
     QAudioFormat m_input_format;
 };

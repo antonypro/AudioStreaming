@@ -5,8 +5,8 @@
 extern "C" {
 #endif
 /* OpenSSL was configured with the following options: */
-#ifndef OPENSSL_SYSNAME_MINGW32
-# define OPENSSL_SYSNAME_MINGW32
+#ifndef OPENSSL_SYSNAME_MINGW64
+# define OPENSSL_SYSNAME_MINGW64
 #endif
 #ifndef OPENSSL_DOING_MAKEDEPEND
 
@@ -58,6 +58,9 @@ extern "C" {
 
 #ifndef OPENSSL_THREADS
 # define OPENSSL_THREADS
+#endif
+#ifndef OPENSSL_NO_ASM
+# define OPENSSL_NO_ASM
 #endif
 #ifndef OPENSSL_NO_STATIC_ENGINE
 # define OPENSSL_NO_STATIC_ENGINE
@@ -112,8 +115,6 @@ extern "C" {
 # endif
 #endif
 
-#define OPENSSL_CPUID_OBJ
-
 /* crypto/opensslconf.h.in */
 
 /* Generate 80386 code? */
@@ -121,8 +122,8 @@ extern "C" {
 
 #if !(defined(VMS) || defined(__VMS)) /* VMS uses logical names instead */
 #if defined(HEADER_CRYPTLIB_H) && !defined(OPENSSLDIR)
-#define ENGINESDIR "/c/build/IMEasy-tools/openssl/lib/engines"
-#define OPENSSLDIR "/c/build/IMEasy-tools/openssl/ssl"
+#define ENGINESDIR "/c/build/IMEasy2Tools2/openssl-1.0.2q.tar/build/lib/engines"
+#define OPENSSLDIR "/c/build/IMEasy2Tools2/openssl-1.0.2q.tar/build/ssl"
 #endif
 #endif
 
@@ -161,7 +162,7 @@ extern "C" {
  * This enables code handling data aligned at natural CPU word
  * boundary. See crypto/rc4/rc4_enc.c for further details.
  */
-#undef RC4_CHUNK
+#define RC4_CHUNK unsigned long long
 #endif
 #endif
 
@@ -169,27 +170,27 @@ extern "C" {
 /* If this is set to 'unsigned int' on a DEC Alpha, this gives about a
  * %20 speed up (longs are 8 bytes, int's are 4). */
 #ifndef DES_LONG
-#define DES_LONG unsigned long
+#define DES_LONG unsigned int
 #endif
 #endif
 
 #if defined(HEADER_BN_H) && !defined(CONFIG_HEADER_BN_H)
 #define CONFIG_HEADER_BN_H
-#define BN_LLONG
+#undef BN_LLONG
 
 /* Should we define BN_DIV2W here? */
 
 /* Only one for the following should be defined */
 #undef SIXTY_FOUR_BIT_LONG
-#undef SIXTY_FOUR_BIT
-#define THIRTY_TWO_BIT
+#define SIXTY_FOUR_BIT
+#undef THIRTY_TWO_BIT
 #endif
 
 #if defined(HEADER_RC4_LOCL_H) && !defined(CONFIG_HEADER_RC4_LOCL_H)
 #define CONFIG_HEADER_RC4_LOCL_H
 /* if this is defined data[i] is used instead of *data, this is a %20
  * speedup on x86 */
-#define RC4_INDEX
+#undef RC4_INDEX
 #endif
 
 #if defined(HEADER_BF_LOCL_H) && !defined(CONFIG_HEADER_BF_LOCL_H)
@@ -203,14 +204,14 @@ extern "C" {
 /* the following is tweaked from a config script, that is why it is a
  * protected undef/define */
 #ifndef DES_PTR
-#define DES_PTR
+#undef DES_PTR
 #endif
 
 /* This helps C compiler generate the correct code for multiple functional
  * units.  It reduces register dependancies at the expense of 2 more
  * registers */
 #ifndef DES_RISC1
-#define DES_RISC1
+#undef DES_RISC1
 #endif
 
 #ifndef DES_RISC2
@@ -224,7 +225,7 @@ extern "C" {
 /* Unroll the inner loop, this sometimes helps, sometimes hinders.
  * Very mucy CPU dependant */
 #ifndef DES_UNROLL
-#define DES_UNROLL
+#undef DES_UNROLL
 #endif
 
 /* These default values were supplied by

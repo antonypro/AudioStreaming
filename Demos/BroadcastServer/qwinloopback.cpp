@@ -13,18 +13,18 @@ QWinLoopback::QWinLoopback(QObject *parent) : QObject(parent)
         pAvSetMmThreadCharacteristics = (tAvSetMmThreadCharacteristics)avrtlib.resolve("AvSetMmThreadCharacteristicsW");
     }
 
-    running = false;
+    m_running = false;
 }
 
 QWinLoopback::~QWinLoopback()
 {
-    Stop();
+    stop();
 }
 
-bool QWinLoopback::Start()
+bool QWinLoopback::start()
 {
-    int maxthread = QThreadPool::globalInstance()->maxThreadCount() + 2;
-    QThreadPool::globalInstance()->setMaxThreadCount(maxthread);
+    int threads = QThreadPool::globalInstance()->maxThreadCount() + 2;
+    QThreadPool::globalInstance()->setMaxThreadCount(threads);
 
     if (!pAvRevertMmThreadCharacteristics)
         return false;
@@ -35,25 +35,25 @@ bool QWinLoopback::Start()
     thread1 = QtConcurrent::run(this, &QWinLoopback::PlaySilence);
     thread2 = QtConcurrent::run(this, &QWinLoopback::LoopbackRecord);
 
-    running = true;
+    m_running = true;
 
     return true;
 }
 
-void QWinLoopback::Stop()
+void QWinLoopback::stop()
 {
-    if (!running)
+    if (!m_running)
         return;
 
-    running = false;
+    m_running = false;
 
     sem1.release();
 
     thread1.waitForFinished();
     thread2.waitForFinished();
 
-    int threadcount = qMax(1, QThreadPool::globalInstance()->maxThreadCount() - 2);
-    QThreadPool::globalInstance()->setMaxThreadCount(threadcount);
+    int threads = qMax(1, QThreadPool::globalInstance()->maxThreadCount() - 2);
+    QThreadPool::globalInstance()->setMaxThreadCount(threads);
 }
 
 const QAudioFormat QWinLoopback::format()
@@ -337,7 +337,7 @@ HRESULT QWinLoopback::LoopbackCapture(
 
     // loopback capture loop
     bool bDone = false;
-    while (!bDone && running) {
+    while (!bDone && m_running) {
 
         // drain data while it is available
         UINT32 nNextPacketSize;
@@ -600,7 +600,7 @@ HRESULT QWinLoopback::PlaySilenceThreadFunction() {
     }
 
     bool bDone = false;
-    while (!bDone && running) {
+    while (!bDone && m_running) {
         WaitForSingleObject(hFeedMe, INFINITE);
 
         // got "feed me" event - see how much padding there is

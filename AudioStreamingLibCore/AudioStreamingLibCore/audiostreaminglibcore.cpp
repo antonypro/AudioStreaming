@@ -3,16 +3,18 @@
 
 #define RUNNING (m_running && m_worker)
 
+int m_worker_count = 0;
+QMutex m_worker_mutex;
+QSemaphore m_worker_semaphore;
+
 AudioStreamingLibCore::AudioStreamingLibCore(QObject *parent) : QObject(parent)
 {
     m_worker = nullptr;
-    m_client_discover = nullptr;
 
     m_input_muted = false;
     m_volume = 0;
 
     m_running = false;
-    m_delete_pending = false;
 
     qRegisterMetaType<StreamingInfo>("StreamingInfo");
     qRegisterMetaType<QHostAddress>("QHostAddress");
@@ -20,12 +22,7 @@ AudioStreamingLibCore::AudioStreamingLibCore(QObject *parent) : QObject(parent)
 
 AudioStreamingLibCore::~AudioStreamingLibCore()
 {
-    if (!RUNNING)
-        return;
-
     stop();
-
-    finishedPrivate();
 }
 
 bool AudioStreamingLibCore::start(const StreamingInfo &streaming_info)
@@ -33,14 +30,7 @@ bool AudioStreamingLibCore::start(const StreamingInfo &streaming_info)
     if (m_running)
         return false;
 
-    m_worker = new AudioStreamingWorker();
-    QThread *m_thread = new QThread();
-    m_worker->moveToThread(m_thread);
-
-    connect(m_worker, &AudioStreamingWorker::destroyed, m_thread, &QThread::quit);
-    connect(m_thread, &QThread::finished, m_thread, &QThread::deleteLater);
-
-    SETTONULLPTR(m_worker);
+    m_worker = new AudioStreamingWorker(this);
 
     connect(m_worker, &AudioStreamingWorker::connected, this, &AudioStreamingLibCore::connected);
     connect(m_worker, &AudioStreamingWorker::connectedToServer, this, &AudioStreamingLibCore::connectedToServer);
@@ -53,6 +43,7 @@ bool AudioStreamingLibCore::start(const StreamingInfo &streaming_info)
     connect(m_worker, &AudioStreamingWorker::outputData, this, &AudioStreamingLibCore::outputData);
     connect(m_worker, &AudioStreamingWorker::veryOutputData, this, &AudioStreamingLibCore::veryOutputData);
     connect(m_worker, &AudioStreamingWorker::extraData, this, &AudioStreamingLibCore::extraData);
+    connect(m_worker, &AudioStreamingWorker::commandXML, this, &AudioStreamingLibCore::commandXML);
     connect(m_worker, &AudioStreamingWorker::inputLevel, this, &AudioStreamingLibCore::inputLevel);
     connect(m_worker, &AudioStreamingWorker::outputLevel, this, &AudioStreamingLibCore::outputLevel);
     connect(m_worker, &AudioStreamingWorker::adjustSettings, this, &AudioStreamingLibCore::adjustSettings);
@@ -60,13 +51,10 @@ bool AudioStreamingLibCore::start(const StreamingInfo &streaming_info)
     connect(m_worker, &AudioStreamingWorker::error, this, &AudioStreamingLibCore::error);
     connect(m_worker, &AudioStreamingWorker::error, this, &AudioStreamingLibCore::stop);
 
-    QMetaObject::invokeMethod(m_worker, "start", Qt::QueuedConnection,
-                              Q_ARG(StreamingInfo, streaming_info));
+    QMetaObject::invokeMethod(m_worker, "start", Qt::QueuedConnection, Q_ARG(StreamingInfo, streaming_info));
 
     QMetaObject::invokeMethod(m_worker, "setVolume", Qt::QueuedConnection, Q_ARG(int, m_volume));
     QMetaObject::invokeMethod(m_worker, "setInputMuted", Qt::QueuedConnection, Q_ARG(bool, m_input_muted));
-
-    m_thread->start();
 
     m_running = true;
 
@@ -75,29 +63,19 @@ bool AudioStreamingLibCore::start(const StreamingInfo &streaming_info)
 
 void AudioStreamingLibCore::stop()
 {
-    if (RUNNING && !m_delete_pending)
-    {
-        m_running = false;
-
-        m_delete_pending = true;
-
-        m_worker->deleteLater();
-
-        m_audio_format = QAudioFormat();
-        m_input_format = QAudioFormat();
-
-        QThread::msleep(100);
-
-        finishedPrivate();
-    }
-}
-
-void AudioStreamingLibCore::finishedPrivate()
-{
-    if (!m_delete_pending)
+    if (!RUNNING)
         return;
 
-    m_delete_pending = false;
+    m_running = false;
+
+    m_audio_format = QAudioFormat();
+    m_input_format = QAudioFormat();
+
+    m_worker->deleteLater();
+
+    m_worker_semaphore.acquire();
+
+    m_worker = nullptr;
 
     emit finished();
 }
@@ -128,7 +106,21 @@ QByteArray AudioStreamingLibCore::convertFloatToInt16(const QByteArray &data)
     format.setSampleSize(16);
     format.setSampleType(QAudioFormat::SignedInt);
 
-    return convertSamplesToInt(data, format);
+    QByteArray new_data;
+    new_data.resize(data.size());
+
+    const float *datafloat = reinterpret_cast<const float*>(data.constData());
+
+    float *newfloat = reinterpret_cast<float*>(new_data.data());
+
+    int size = data.size() / int(sizeof(float));
+
+    for (int i = 0; i < size; i++)
+    {
+        newfloat[i] = qBound(float(-1), datafloat[i], float(1));
+    }
+
+    return convertSamplesToInt(new_data, format);
 }
 
 QByteArray AudioStreamingLibCore::convertInt16ToFloat(const QByteArray &data)
@@ -148,15 +140,36 @@ QByteArray AudioStreamingLibCore::mixFloatAudio(const QByteArray &data1, const Q
     if (data1.size() != data2.size())
         return QByteArray();
 
-    QByteArray data1cpy = data1;
-    QByteArray data2cpy = data2;
+    QByteArray mixed;
+    mixed.resize(data1.size());
 
-    Eigen::Ref<Eigen::VectorXf> samples_float_1 = Eigen::Map<Eigen::VectorXf>(reinterpret_cast<float*>(data1cpy.data()), data1cpy.size() / int(sizeof(float)));
-    Eigen::Ref<Eigen::VectorXf> samples_float_2 = Eigen::Map<Eigen::VectorXf>(reinterpret_cast<float*>(data2cpy.data()), data2cpy.size() / int(sizeof(float)));
+    const float *data1float = reinterpret_cast<const float*>(data1.constData());
+    const float *data2float = reinterpret_cast<const float*>(data2.constData());
 
-    Eigen::VectorXf samples_mixed = samples_float_1 * 0.5f + samples_float_2 * 0.5f;
+    float *mixedfloat = reinterpret_cast<float*>(mixed.data());
 
-    return QByteArray(reinterpret_cast<char*>(samples_mixed.data()), samples_mixed.size() * int(sizeof(float)));
+    int size = data1.size() / int(sizeof(float));
+
+    for (int i = 0; i < size; i++)
+    {
+        if ((data1float[i] < 0 && data2float[i] < 0) || (data1float[i] > 0 && data2float[i] > 0))
+        {
+            mixedfloat[i] = (data1float[i] + data2float[i]) - (data1float[i] * data2float[i]);
+        }
+        else
+        {
+            mixedfloat[i] = data1float[i] + data2float[i];
+        }
+
+        mixedfloat[i] = qBound(float(-1), mixedfloat[i], float(1));
+    }
+
+    return mixed;
+}
+
+QString AudioStreamingLibCore::EigenInstructionsSet()
+{
+    return QString(Eigen::SimdInstructionSetsInUse());
 }
 
 bool AudioStreamingLibCore::isRunning()
@@ -170,7 +183,7 @@ DiscoverClient *AudioStreamingLibCore::discoverInstance()
         m_client_discover->deleteLater();
 
     m_client_discover = new DiscoverClient(this);
-    SETTONULLPTR(m_client_discover);
+
     QTimer::singleShot(1000, m_client_discover, &DiscoverClient::deleteLater);
 
     return m_client_discover;
@@ -181,17 +194,25 @@ void AudioStreamingLibCore::listen(quint16 port, bool auto_accept, const QByteAr
     if (!RUNNING)
         return;
 
-    QMetaObject::invokeMethod(m_worker, "listen", Qt::QueuedConnection,
+    QMetaObject::invokeMethod(m_worker, "listen", Qt::BlockingQueuedConnection,
                               Q_ARG(quint16, port), Q_ARG(bool, auto_accept), Q_ARG(QByteArray, password), Q_ARG(int, qMax(max_connections, 1)));
 }
 
-void AudioStreamingLibCore::connectToHost(const QString &host, quint16 port, const QByteArray &password, bool new_user)
+void AudioStreamingLibCore::connectToHost(const QString &host, quint16 port, const QByteArray &password)
 {
     if (!RUNNING)
         return;
 
-    QMetaObject::invokeMethod(m_worker, "connectToHost", Qt::QueuedConnection,
-                              Q_ARG(QString, host), Q_ARG(quint16, port), Q_ARG(QByteArray, password), Q_ARG(bool, new_user));
+    QMetaObject::invokeMethod(m_worker, "connectToHost", Qt::BlockingQueuedConnection,
+                              Q_ARG(QString, host), Q_ARG(quint16, port), Q_ARG(QByteArray, password));
+}
+
+void AudioStreamingLibCore::writeCommandXML(const QByteArray &XML)
+{
+    if (!RUNNING)
+        return;
+
+    QMetaObject::invokeMethod(m_worker, "writeCommandXML", Qt::QueuedConnection, Q_ARG(QByteArray, XML));
 }
 
 void AudioStreamingLibCore::connectToPeer(const QString &ID)
@@ -210,14 +231,6 @@ void AudioStreamingLibCore::disconnectFromPeer()
     QMetaObject::invokeMethod(m_worker, "disconnectFromPeer", Qt::QueuedConnection);
 }
 
-void AudioStreamingLibCore::acceptSslCertificate()
-{
-    if (!RUNNING)
-        return;
-
-    QMetaObject::invokeMethod(m_worker, "acceptSslCertificate", Qt::QueuedConnection);
-}
-
 void AudioStreamingLibCore::acceptConnection()
 {
     if (!RUNNING)
@@ -232,6 +245,14 @@ void AudioStreamingLibCore::rejectConnection()
         return;
 
     QMetaObject::invokeMethod(m_worker, "rejectConnection", Qt::QueuedConnection);
+}
+
+void AudioStreamingLibCore::acceptSslCertificate()
+{
+    if (!RUNNING)
+        return;
+
+    QMetaObject::invokeMethod(m_worker, "acceptSslCertificate", Qt::QueuedConnection);
 }
 
 void AudioStreamingLibCore::writeExtraData(const QByteArray &data)
@@ -469,7 +490,7 @@ QDataStream &operator>>(QDataStream &stream, StreamingInfo &info)
 
     QAudioDeviceInfo inputinfo;
 
-    foreach (const QAudioDeviceInfo &audio_info, QAudioDeviceInfo::availableDevices(QAudio::AudioInput))
+    for (const QAudioDeviceInfo &audio_info : QAudioDeviceInfo::availableDevices(QAudio::AudioInput))
     {
         if (audio_info.deviceName() == inputdeviceName)
         {
@@ -484,7 +505,7 @@ QDataStream &operator>>(QDataStream &stream, StreamingInfo &info)
 
     QAudioDeviceInfo outputinfo;
 
-    foreach (const QAudioDeviceInfo &audio_info, QAudioDeviceInfo::availableDevices(QAudio::AudioOutput))
+    for (const QAudioDeviceInfo &audio_info : QAudioDeviceInfo::availableDevices(QAudio::AudioOutput))
     {
         if (audio_info.deviceName() == outputdeviceName)
         {
@@ -508,7 +529,7 @@ QDataStream &operator>>(QDataStream &stream, StreamingInfo &info)
     return stream;
 }
 
-QDebug operator<<(QDebug debug, StreamingInfo info)
+QDebug &operator<<(QDebug &debug, StreamingInfo &info)
 {
     debug << "Negotiation string:" << qPrintable(info.negotiationString().trimmed()) << endl;
 

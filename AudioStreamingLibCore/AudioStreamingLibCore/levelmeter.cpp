@@ -1,15 +1,16 @@
 #include "levelmeter.h"
 
-//Compute level of the input data and of the output data when
-//choose to not use the audio output device provided in this library
-
+//Compute level of the input data and of the output data
 #define INTERVAL 50
 
 LevelMeter::LevelMeter(QObject *parent) : QObject(parent)
 {
-    m_timer = nullptr;
-
     START_THREAD
+}
+
+LevelMeter::~LevelMeter()
+{
+    STOP_THREAD
 }
 
 void LevelMeter::startPrivate(const QAudioFormat &format)
@@ -23,7 +24,7 @@ void LevelMeter::startPrivate(const QAudioFormat &format)
     if (!m_timer)
     {
         m_timer = new QTimer(this);
-        SETTONULLPTR(m_timer);
+
         m_timer->setTimerType(Qt::PreciseTimer);
         connect(m_timer, &QTimer::timeout, this, &LevelMeter::currentlevelPrivate);
         m_timer->start(INTERVAL);
@@ -45,7 +46,14 @@ void LevelMeter::currentlevelPrivate()
 
 void LevelMeter::writePrivate(const QByteArray &data)
 {
-    m_buffer.append(data);
+    Eigen::VectorXf samples = Eigen::VectorXf(data.size() / int(sizeof(float)));
+
+    memcpy(samples.data(), data.data(), uint(data.size()));
+
+    samples = samples.array().abs();
+
+    m_buffer.append(reinterpret_cast<char*>(samples.data()), samples.size() * int(sizeof(float)));
+
     process();
 }
 

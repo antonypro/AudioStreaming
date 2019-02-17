@@ -3,11 +3,14 @@
 #define TITLE "Walkie Talkie Demo"
 
 static QPlainTextEdit *debug_edit = nullptr;
+static QMutex debug_mutex;
 
 void messageHandler(QtMsgType type, const QMessageLogContext &context, const QString &msg)
 {
     Q_UNUSED(type)
     Q_UNUSED(context)
+
+    QMutexLocker locker(&debug_mutex);
 
     if (debug_edit)
         QMetaObject::invokeMethod(debug_edit, "appendPlainText", Q_ARG(QString, msg));
@@ -21,16 +24,31 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 
     m_connecting_connected_to_peer = false;
 
-    m_audio_lib = nullptr;
+    m_total_size = 0;
+
+    m_paused = true;
+
     m_discover_instance = new AudioStreamingLibCore(this);
+
+    initWidgets();
+
+    qInstallMessageHandler(messageHandler);
+}
+
+MainWindow::~MainWindow()
+{
+    QMutexLocker locker(&debug_mutex);
+
+    debug_edit = nullptr;
+}
+
+void MainWindow::initWidgets()
+{
+    websettings = new Settings(this);
 
     listwidgetpeers = new QListWidget(this);
 
     connect(listwidgetpeers, &QListWidget::itemClicked, this, &MainWindow::selectPeer);
-
-    m_audio_recorder = nullptr;
-
-    m_paused = true;
 
     //Common
 
@@ -75,6 +93,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     linewebpassword = new QLineEdit(this);
     linewebpassword->setEchoMode(QLineEdit::Password);
 
+    labelwebcode = new QLabel(this);
+    labelwebcode->setText("Code:");
+
+    linewebcode = new QLineEdit(this);
+
     labelsamplerateweb = new QLabel(this);
     labelsamplerateweb->setText("Sample rate:");
     linesamplerateweb = new QLineEdit(this);
@@ -106,12 +129,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
         layout->addWidget(linewebid, 5, 1);
         layout->addWidget(labelwebpassword, 6, 0);
         layout->addWidget(linewebpassword, 6, 1);
-        layout->addWidget(labelsamplerateweb, 7, 0);
-        layout->addWidget(linesamplerateweb, 7, 1);
-        layout->addWidget(labelchannelsweb, 8, 0);
-        layout->addWidget(linechannelsweb, 8, 1);
-        layout->addWidget(labelbuffertimeweb, 9, 0);
-        layout->addWidget(linebuffertimeweb, 9, 1);
+        layout->addWidget(labelwebcode, 7, 0);
+        layout->addWidget(linewebcode, 7, 1);
+        layout->addWidget(labelsamplerateweb, 8, 0);
+        layout->addWidget(linesamplerateweb, 8, 1);
+        layout->addWidget(labelchannelsweb, 9, 0);
+        layout->addWidget(linechannelsweb, 9, 1);
+        layout->addWidget(labelbuffertimeweb, 10, 0);
+        layout->addWidget(linebuffertimeweb, 10, 1);
     }
 
     //Client
@@ -322,7 +347,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     QWidget *recorder = new QWidget(this);
 
     QGridLayout *layout_record = new QGridLayout(recorder);
-    layout_record->addWidget(new QLabel("Wave file:", this), 0, 0);
+    layout_record->addWidget(new QLabel("Audio file:", this), 0, 0);
     layout_record->addWidget(linerecordpath, 0, 1);
     layout_record->addWidget(buttonsearch, 0, 2);
     layout_record->addWidget(buttonrecord, 0, 3);
@@ -336,10 +361,16 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 
     tabwidget->addTab(scrollclientserver, "Client Server");
     tabwidget->addTab(listwidgetpeers, "Search");
+    tabwidget->addTab(websettings, "Web Settings");
     tabwidget->addTab(widgetchat, "Chat");
     tabwidget->addTab(recorder, "Record");
     tabwidget->addTab(texteditsettings, "Settings");
     tabwidget->addTab(texteditlog, "Log");
+
+    connect(websettings, &Settings::commandXML, this, [=](const QByteArray &xml_data){
+        if (m_audio_lib)
+            m_audio_lib->writeCommandXML(xml_data);
+    });
 
     connect(tabwidget, &QTabWidget::currentChanged, this, &MainWindow::currentChanged);
 
@@ -348,8 +379,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 
     connect(slidervolume, &QSlider::valueChanged, this, &MainWindow::sliderVolumeValueChanged);
 
-    connect(buttonsigninweb, &QPushButton::clicked, this, &MainWindow::webClient);
-    connect(buttonsignupweb, &QPushButton::clicked, this, &MainWindow::webClient);
+    connect(buttonsigninweb, &QPushButton::clicked, this, [=]{
+        webClient(linewebid->text(), linewebpassword->text());
+    });
+
+    connect(buttonsignupweb, &QPushButton::clicked, this, [=]{
+        webClient(linewebid->text(), linewebpassword->text(), true, linewebcode->text());
+    });
+
     connect(buttonconnect, &QPushButton::clicked, this, &MainWindow::client);
     connect(buttonstartserver, &QPushButton::clicked, this, &MainWindow::server);
 
@@ -396,24 +433,17 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     //Initial size
     resize(sizeHint());
 
-    connect(linewebid, &QLineEdit::textChanged, [=](const QString &text){
+    connect(linewebid, &QLineEdit::textChanged, this, [=](const QString &text){
         linewebid->blockSignals(true);
         linewebid->setText(cleanString(text));
         linewebid->blockSignals(false);
     });
 
-    connect(linewebpassword, &QLineEdit::textChanged, [=](const QString &text){
+    connect(linewebpassword, &QLineEdit::textChanged, this, [=](const QString &text){
         linewebpassword->blockSignals(true);
         linewebpassword->setText(cleanString(text));
         linewebpassword->blockSignals(false);
     });
-
-    qInstallMessageHandler(messageHandler);
-}
-
-MainWindow::~MainWindow()
-{
-    debug_edit = nullptr;
 }
 
 void MainWindow::currentChanged(int index)
@@ -476,7 +506,7 @@ void MainWindow::selectPeer(QListWidgetItem *item)
     tabwidget->setCurrentIndex(0);
 }
 
-void MainWindow::webClient()
+void MainWindow::webClient(const QString &username, const QString &password, bool new_user, const QString &code)
 {
     if (m_audio_lib)
     {
@@ -487,13 +517,7 @@ void MainWindow::webClient()
         return;
     }
 
-    bool new_user = (sender() == buttonsignupweb);
-
     m_audio_lib = new AudioStreamingLibCore(this);
-
-    connect(m_audio_lib, &AudioStreamingLibCore::destroyed, [&]{m_audio_lib = nullptr;});
-
-    QByteArray password = linewebpassword->text().toLatin1();
 
     QAudioDeviceInfo inputdevinfo = comboboxaudioinput->currentData().value<QAudioDeviceInfo>();
     QAudioDeviceInfo outputdevinfo = comboboxaudiooutput->currentData().value<QAudioDeviceInfo>();
@@ -515,9 +539,11 @@ void MainWindow::webClient()
     info.setEncryptionEnabled(!password.isEmpty());
     info.setGetAudioEnabled(true);
     info.setNegotiationString(QByteArray("WalkieTalkieTCPDemo"));
-    info.setID(linewebid->text().trimmed());
+    info.setID(username.trimmed());
 
     buttonrecord->setEnabled(true);
+
+    connect(m_audio_lib, &AudioStreamingLibCore::commandXML, websettings, &Settings::processCommandXML);
 
     connect(m_audio_lib, &AudioStreamingLibCore::error, this, &MainWindow::error);
 
@@ -548,7 +574,7 @@ void MainWindow::webClient()
 
     m_audio_lib->setVolume(slidervolume->value());
 
-    m_audio_lib->connectToHost(lineserverweb->text(), quint16(lineportserver->text().toInt()), password, new_user);
+    m_audio_lib->connectToHost(lineserverweb->text(), quint16(lineportserver->text().toInt()));
 
     webClientStarted(false);
 
@@ -557,6 +583,12 @@ void MainWindow::webClient()
     buttonsignupweb->setEnabled(false);
 
     tabwidget->setTabEnabled(1, false);
+
+    linewebpassword->clear();
+    linewebcode->clear();
+
+    m_web_login_xml = XMLWriter("LOGIN", info.negotiationString().leftJustified(128, char(0), true),
+                                info.ID().toLatin1(), password.toLatin1(), getBytes<bool>(new_user), code.toLatin1());
 }
 
 void MainWindow::client()
@@ -571,8 +603,6 @@ void MainWindow::client()
     }
 
     m_audio_lib = new AudioStreamingLibCore(this);
-
-    connect(m_audio_lib, &AudioStreamingLibCore::destroyed, [&]{m_audio_lib = nullptr;});
 
     QByteArray password = lineclientpassword->text().toLatin1();
 
@@ -636,8 +666,6 @@ void MainWindow::server()
     }
 
     m_audio_lib = new AudioStreamingLibCore(this);
-
-    connect(m_audio_lib, &AudioStreamingLibCore::destroyed, [&]{m_audio_lib = nullptr;});
 
     QByteArray password = lineserverpassword->text().toLatin1();
 
@@ -719,6 +747,7 @@ void MainWindow::webClientStarted(bool enable)
     lineportweb->setEnabled(enable);
     linewebid->setEnabled(enable);
     linewebpassword->setEnabled(enable);
+    linewebcode->setEnabled(enable);
     linesamplerateweb->setEnabled(enable);
     linechannelsweb->setEnabled(enable);
     linebuffertimeweb->setEnabled(enable);
@@ -763,10 +792,16 @@ void MainWindow::connectedToServer(const QByteArray &hash)
     {
         m_audio_lib->stop();
 
+        m_web_login_xml.clear();
+
         return;
     }
 
     m_audio_lib->acceptSslCertificate();
+
+    m_audio_lib->writeCommandXML(m_web_login_xml);
+
+    m_web_login_xml.clear();
 
     buttonconnecttopeer->setEnabled(true);
 
@@ -814,6 +849,8 @@ void MainWindow::webClientConnected(const QHostAddress &address, const QString &
     linechat->blockSignals(false);
     buttonsendchat->setEnabled(true);
 
+    buttonrecord->setEnabled(true);
+
     boxautostart->setEnabled(false);
 
     if (boxautostart->isChecked())
@@ -839,6 +876,8 @@ void MainWindow::clientConnected(const QHostAddress &address, const QString &id)
     linechat->blockSignals(false);
     buttonsendchat->setEnabled(true);
 
+    buttonrecord->setEnabled(true);
+
     boxautostart->setEnabled(false);
 
     if (boxautostart->isChecked())
@@ -860,6 +899,8 @@ void MainWindow::serverConnected(const QHostAddress &address, const QString &id)
 
     linechat->blockSignals(false);
     buttonsendchat->setEnabled(true);
+
+    buttonrecord->setEnabled(true);
 
     boxautostart->setEnabled(false);
 
@@ -936,6 +977,8 @@ void MainWindow::webClientLoggedIn()
     buttonconnecttopeer->setEnabled(true);
 
     buttonsigninweb->setText("Disconnect from server");
+
+    emit websettings->loggedIn();
 }
 
 void MainWindow::webClientWarning(const QString &message)
@@ -966,6 +1009,7 @@ void MainWindow::adjustSettings()
 
     QAudioFormat inputFormat = m_audio_lib->inputAudioFormat();
     QAudioFormat format = m_audio_lib->audioFormat();
+    qint32 bufferTime = m_audio_lib->streamingInfo().timeToBuffer();
 
     QString str;
 
@@ -987,47 +1031,91 @@ void MainWindow::adjustSettings()
     str.append(QString("Sample type: %0\n").arg((format.sampleType() == QAudioFormat::Float) ? "Float" : "Integer"));
     str.append(QString("Byte order: %0\n").arg((format.byteOrder() == QAudioFormat::LittleEndian) ? "Little endian" : "Big endian"));
 
-    str.append(QString("\nBuffer time: %0 ms").arg(m_audio_lib->streamingInfo().timeToBuffer()));
+    str.append(QString("\nBuffer time: %0 ms%1").arg(bufferTime).arg(bufferTime == 0 ? ("(Smart buffer)") : QString()));
+
+    str.append("\n\n");
+
+    str.append("Eigen instructions set:\n");
+
+    str.append(AudioStreamingLibCore::EigenInstructionsSet());
 
     texteditsettings->setPlainText(str);
 }
 
 void MainWindow::setRecordPath()
 {
-    QString path = QFileDialog::getSaveFileName(this, "Select the wave path", QString(), "WAVE (*.wav)");
+    QString selected_filter;
+    QString path = QFileDialog::getSaveFileName(this, "Select the audio path", QString(),
+                                                "WAVE (*.wav);;MP3 (*.mp3)", &selected_filter,
+                                                QFileDialog::DontConfirmOverwrite);
 
     if (path.isEmpty())
         return;
+
+    if (selected_filter == "WAVE (*.wav)" && !path.endsWith(".wav", Qt::CaseInsensitive))
+        path.append(".wav");
+    else if (selected_filter == "MP3 (*.mp3)" && !path.endsWith(".mp3", Qt::CaseInsensitive))
+        path.append(".mp3");
 
     linerecordpath->setText(QDir::toNativeSeparators(path));
 }
 
 void MainWindow::startPauseRecord()
 {
+    if (!m_audio_recorder && !m_audio_recorder_mp3)
+    {
+        if (QFileInfo(linerecordpath->text()).exists())
+        {
+            int result = msgBoxQuestion("File already exists",
+                                        QString("File %0 already exists. Replace it?")
+                                        .arg(QFileInfo(linerecordpath->text()).fileName()), this);
+
+            if (result != QMessageBox::Yes)
+                return;
+        }
+    }
+
     if (m_paused)
     {
-        if (!m_audio_recorder)
+        linerecordpath->setEnabled(false);
+        buttonsearch->setEnabled(false);
+        buttonrecordstop->setEnabled(true);
+
+        m_format = m_audio_lib->audioFormat();
+        //Change to compatible settings
+        m_format.setSampleSize(16);
+        m_format.setSampleType(QAudioFormat::SignedInt);
+
+        if (!linerecordpath->text().endsWith(".mp3"))
         {
-            linerecordpath->setEnabled(false);
-            buttonsearch->setEnabled(false);
-            buttonrecordstop->setEnabled(true);
-
-            m_format = m_audio_lib->audioFormat();
-            //Change to compatible settings
-            m_format.setSampleSize(16);
-            m_format.setSampleType(QAudioFormat::SignedInt);
-
-            m_audio_recorder = new AudioRecorder(linerecordpath->text(), m_format, m_audio_lib);
-
-            connect(m_audio_recorder, &AudioRecorder::destroyed, [&]{m_audio_recorder = nullptr;});
-
-            if (!m_audio_recorder->open())
+            if (!m_audio_recorder)
             {
-                stopRecord();
+                m_audio_recorder = new AudioRecorder(linerecordpath->text(), m_format, m_audio_lib);
 
-                msgBoxCritical("Error", "Error openning file for record!", this);
+                if (!m_audio_recorder->open())
+                {
+                    stopRecord();
 
-                return;
+                    msgBoxCritical("Error", "Error openning wave file for record!", this);
+
+                    return;
+                }
+            }
+        }
+        else
+        {
+            if (!m_audio_recorder_mp3)
+            {
+                m_audio_recorder_mp3 = new MP3Recorder(this);
+
+                if (!m_audio_recorder_mp3->start(linerecordpath->text(), m_format, 128))
+                {
+                    stopRecord();
+
+                    msgBoxCritical("Error", "Error openning mp3 file for record!", this);
+
+                    return;
+                }
             }
         }
 
@@ -1058,6 +1146,15 @@ void MainWindow::stopRecord()
 
         m_audio_recorder->deleteLater();
     }
+    else if (m_audio_recorder_mp3)
+    {
+        disconnect(m_audio_lib, &AudioStreamingLibCore::veryInputData, this, &MainWindow::writeLocalToBuffer);
+        disconnect(m_audio_lib, &AudioStreamingLibCore::veryOutputData, this, &MainWindow::writePeerToBuffer);
+
+        m_audio_recorder_mp3->deleteLater();
+    }
+
+    m_total_size = 0;
 
     linerecordpath->setEnabled(true);
     buttonsearch->setEnabled(true);
@@ -1109,9 +1206,14 @@ void MainWindow::mixLocalPeer()
 
         m_peer_audio.remove(0, size);
 
-        m_audio_recorder->write(AudioStreamingLibCore::convertFloatToInt16(mixed));
+        if (m_audio_recorder)
+            m_audio_recorder->write(AudioStreamingLibCore::convertFloatToInt16(mixed));
+        else if (m_audio_recorder_mp3)
+            m_audio_recorder_mp3->encode(AudioStreamingLibCore::convertFloatToInt16(mixed));
 
-        int recorded = int(AudioStreamingLibCore::sizeToTime(m_audio_recorder->size() - 44, m_format));
+        m_total_size += mixed.size() / int(sizeof(float) / sizeof(qint16));
+
+        int recorded = int(AudioStreamingLibCore::sizeToTime(m_total_size, m_format));
 
         QTime time = QTime(0, 0, 0).addMSecs(recorded);
 
@@ -1184,6 +1286,8 @@ void MainWindow::finished()
 
     buttonsignupweb->setEnabled(true);
 
+    emit websettings->loggedOut();
+
     m_peer = QString();
 
     m_connecting_connected_to_peer = false;
@@ -1194,7 +1298,10 @@ void MainWindow::finished()
     tabwidget->setTabEnabled(1, true);
 
     if (m_audio_lib)
+    {
+        qDebug() << __FUNCTION__ << "deleteLater";
         m_audio_lib->deleteLater();
+    }
 
     m_local_audio.clear();
     m_peer_audio.clear();

@@ -22,6 +22,7 @@ signals:
     void disconnected(PeerData);
     void readyRead(PeerData);
     void pending(QHostAddress, QString);
+    void commandXML(QByteArray);
     void error(QString);
 
 public slots:
@@ -29,8 +30,8 @@ public slots:
     virtual void connectToHost(const QString &host, quint16 port,
                                const QByteArray &negotiation_string,
                                const QString &id,
-                               const QByteArray &password,
-                               bool new_user) = 0;
+                               const QByteArray &password) = 0;
+    virtual void writeCommandXML(const QByteArray &XML) = 0;
     virtual void connectToPeer(const QString &peer_id) = 0;
     virtual void disconnectFromPeer() = 0;
     virtual void stop() = 0;

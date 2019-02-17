@@ -5,59 +5,19 @@
 #include <QtGui>
 #include <QtWidgets>
 #include <AudioStreamingLibCore>
+#include "common.h"
+#ifndef Q_OS_ANDROID
+#include "ffmpegclass.h"
+#endif
 #include "spectrumanalyzer.h"
 #include "barswidget.h"
 #include "waveformwidget.h"
 #include "levelwidget.h"
 #include "audiorecorder.h"
+#include "mp3recorder.h"
 #ifdef Q_OS_WIN
 #include "qwinloopback.h"
 #endif
-
-static inline int msgBoxQuestion(const QString &title, const QString &message, QWidget *parent = nullptr)
-{
-    QMessageBox msgbox(parent);
-
-#ifdef Q_OS_MACOS
-    msgbox.setWindowModality(Qt::WindowModal);
-#endif
-    msgbox.setIcon(QMessageBox::Question);
-    msgbox.setStandardButtons(QMessageBox::Yes);
-    msgbox.addButton(QMessageBox::No);
-    msgbox.setDefaultButton(QMessageBox::Yes);
-    msgbox.setWindowTitle(title);
-    msgbox.setText(message);
-
-    return msgbox.exec();
-}
-
-static inline void msgBoxWarning(const QString &title, const QString &message, QWidget *parent = nullptr)
-{
-    QMessageBox msgbox(parent);
-
-#ifdef Q_OS_MACOS
-    msgbox.setWindowModality(Qt::WindowModal);
-#endif
-    msgbox.setIcon(QMessageBox::Warning);
-    msgbox.setWindowTitle(title);
-    msgbox.setText(message);
-
-    msgbox.exec();
-}
-
-static inline void msgBoxCritical(const QString &title, const QString &message, QWidget *parent = nullptr)
-{
-    QMessageBox msgbox(parent);
-
-#ifdef Q_OS_MACOS
-    msgbox.setWindowModality(Qt::WindowModal);
-#endif
-    msgbox.setIcon(QMessageBox::Critical);
-    msgbox.setWindowTitle(title);
-    msgbox.setText(message);
-
-    msgbox.exec();
-}
 
 class MainWindow : public QMainWindow
 {
@@ -67,8 +27,14 @@ public:
     ~MainWindow();
 
 private slots:
+    void initWidgets();
     void start();
     void loopbackdata(const QByteArray &data);
+    void ffmpegdata(const QByteArray &data);
+    void ffmpegplay();
+    void ffmpegpause();
+    void ffmpegstop();
+    void ffmpegallfinished();
     void process(const QByteArray &data);
     void adjustSettings();
     void setRecordPath();
@@ -77,26 +43,38 @@ private slots:
     void resetRecordPage();
     void writeToFile(const QByteArray &data);
     void updateConnections();
+    void boxListenInputClicked(bool checked);
+    void volumeChanged(int volume);
     void error(const QString &error);
     void finished();
     void currentIndexChanged(int index);
     void getDevInfo();
 
 private:
-    AudioStreamingLibCore *m_audio_lib;
+    enum AudioInputInfo
+    {
+        Loopback,
+        FFMPEG,
+        Other
+    };
 
-    SpectrumAnalyzer *m_spectrum_analyzer;
+    QPointer<AudioStreamingLibCore> m_audio_lib;
+
+    QPointer<SpectrumAnalyzer> m_spectrum_analyzer;
 
 #ifdef Q_OS_WIN
-    QWinLoopback *loopback;
-    QByteArray buffer;
+    QPointer<QWinLoopback> m_loopback;
 #endif
+
+    QByteArray m_buffer;
+
     QComboBox *comboboxaudioinput;
 
     QTabWidget *tabwidget;
 
     QListWidget *listconnections;
 
+    QCheckBox *boxlisteninput;
     QLineEdit *lineport;
     QLineEdit *linemaxconnections;
     QPushButton *buttonstart;
@@ -104,10 +82,19 @@ private:
     QLineEdit *linechannels;
     QLineEdit *lineid;
     QLineEdit *linepassword;
+    QLabel *labelvolume;
+    QSlider *slidervolume;
     QPlainTextEdit *texteditsettings;
     BarsWidget *bars;
     WaveFormWidget *waveform;
     LevelWidget *level;
+
+#ifndef Q_OS_ANDROID
+    FFMPEGClass *m_ffmpeg;
+#endif
+
+    bool m_ffmpeg_playing;
+    bool m_ffmpeg_terminating;
 
     QLineEdit *linerecordpath;
     QPushButton *buttonsearch;
@@ -118,8 +105,10 @@ private:
 
     QPlainTextEdit *texteditlog;
 
-    AudioRecorder *m_audio_recorder;
+    QPointer<AudioRecorder> m_audio_recorder;
+    QPointer<MP3Recorder> m_audio_recorder_mp3;
     QAudioFormat m_format;
+    qint64 m_total_size;
     bool m_paused;
 };
 

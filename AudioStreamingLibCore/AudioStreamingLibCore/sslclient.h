@@ -21,6 +21,7 @@ signals:
     void connectedToPeer(QByteArray, QByteArray);
     void disconnectedFromPeer();
     void P2PData(QByteArray);
+    void commandXML(QByteArray);
     void error(QString);
 
 public slots:
@@ -40,7 +41,7 @@ private slots:
     void alive();
 
 private:
-    QSslSocket *m_socket;
+    QPointer<QSslSocket> m_socket;
     QByteArray m_buffer;
     qint32 m_size;
     QTimer *m_timer;

@@ -16,8 +16,8 @@ public slots:
     void connectToHost(const QString &host, quint16 port,
                        const QByteArray &negotiation_string,
                        const QString &id,
-                       const QByteArray &password,
-                       bool new_user);
+                       const QByteArray &password);
+    void writeCommandXML(const QByteArray &XML);
     void connectToPeer(const QString &peer_id);
     void disconnectFromPeer();
     void stop();
@@ -36,8 +36,8 @@ private slots:
     void readyReadPrivate();
 
 private:
-    QTcpSocket *m_socket;
-    OpenSslLib *m_openssl;
+    QPointer<QTcpSocket> m_socket;
+    QPointer<OpenSslLib> m_openssl;
     QByteArray m_buffer;
     qint32 m_size;
     QTimer *m_timer;

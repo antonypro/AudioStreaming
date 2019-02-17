@@ -129,7 +129,7 @@ void SslServer::listen()
     if (m_server)
         return;
 
-    quint16 port = 0;
+    int port = 0;
 
     if (!global_settings->contains("port"))
         global_settings->setValue("port", 1024);
@@ -137,9 +137,9 @@ void SslServer::listen()
     if (!global_settings->contains("maxconnections"))
         global_settings->setValue("maxconnections", 30);
 
-    port = quint16(global_settings->value("port").toInt());
+    port = global_settings->value("port").toInt();
 
-    if (port < 1 || port > 65534)
+    if (port < 1 || port > 65535)
     {
         DEBUG_FUNCTION("Error:" << "Invalid port!");
         return;
@@ -155,13 +155,11 @@ void SslServer::listen()
 
     m_server = new TcpServer(this);
 
-    SETTONULLPTR(m_server);
-
     m_server->setMaxPendingConnections(m_max_connections);
 
     connect(m_server, &TcpServer::serverIncomingConnection, this, &SslServer::newConnectionPrivate);
 
-    bool listening = m_server->listen(QHostAddress::AnyIPv4, port);
+    bool listening = m_server->listen(QHostAddress::AnyIPv4, quint16(port));
 
     if (!listening)
     {
@@ -233,7 +231,7 @@ void SslServer::timeout(QSslSocket *socket)
 {
     QHostAddress host = socket->peerAddress();
 
-    DEBUG_FUNCTION("Timed out:" << qPrintable(QHostAddress(host.toIPv4Address()).toString()));
+    DEBUG_FUNCTION(qPrintable(socket->peerAddress().toString()) << "Timed out:");
 
     removeSocket(socket);
 }
@@ -274,7 +272,7 @@ void SslServer::encrypted()
 
     QHostAddress host = socket->peerAddress();
 
-    DEBUG_FUNCTION("Connected:" << qPrintable(QHostAddress(host.toIPv4Address()).toString()));
+    DEBUG_FUNCTION(qPrintable(socket->peerAddress().toString()) << "Connected!");
 }
 
 void SslServer::readyReadPrivate()
@@ -335,64 +333,6 @@ void SslServer::process(const PeerData &pd)
 
     switch (command)
     {
-    case ServerCommand::PeerInfo:
-    {
-        m_alive_hash[socket].restart();
-
-        if (data.size() != 128 + 20 + 64 + 1)
-        {
-            removeSocket(socket);
-            return;
-        }
-
-        QByteArray peer_negotiation_string = data.mid(0, 128);
-        QByteArray peer_id = data.mid(128, 20);
-        QByteArray password = data.mid(128 + 20, 64);
-        bool new_user = getValue<bool>(data.mid(128 + 20 + 64, 1));
-
-        if (peer_negotiation_string != NEGOTIATION_STRING)
-        {
-            writeWarning(socket, "Invalid NEGOTIATION STRING!", true);
-            return;
-        }
-
-        if (m_id_list.contains(peer_id))
-        {
-            writeWarning(socket, "This user is already connected!", true);
-            return;
-        }
-
-        if (new_user)
-        {
-            if (m_sql.userExists(cleanString(QLatin1String(peer_id))))
-            {
-                writeWarning(socket, "User already exists!", true);
-                return;
-            }
-            else if (!m_sql.createUser(cleanString(QLatin1String(peer_id)), cleanString(QLatin1String(password))))
-            {
-                writeWarning(socket, "Can't create new user!", true);
-                return;
-            }
-        }
-
-        if (!m_sql.loginUser(cleanString(QLatin1String(peer_id)), cleanString(QLatin1String(password))))
-        {
-            writeWarning(socket, "Can't login with this user and password!", true);
-            return;
-        }
-
-        m_id_list.append(peer_id);
-        m_id_hash.insert(socket, peer_id);
-
-        QByteArray data;
-        data.append(getBytes<quint8>(ServerCommand::LoggedIn));
-
-        socket->write(getBytes<qint32>(data.size()));
-        socket->write(data);
-
-        break;
-    }
     case ServerCommand::PeerTryConnect:
     {
         if (data.size() != 20)
@@ -407,12 +347,14 @@ void SslServer::process(const PeerData &pd)
 
         if (peer_id == m_id_hash[socket])
         {
+            DEBUG_FUNCTION(qPrintable(socket->peerAddress().toString()) << qPrintable(m_id_hash.value(socket)) << qPrintable(peer_id) << "Attempt to connect to itself!");
             writeWarning(socket, "You're trying to connect to itself!");
             return;
         }
 
         if (!m_id_list.contains(peer_id))
         {
+            DEBUG_FUNCTION(qPrintable(socket->peerAddress().toString()) << qPrintable(m_id_hash.value(socket)) << qPrintable(peer_id) << "Attempt to connect to non connected user!");
             writeWarning(socket, "You're trying to connect to a non connected user!");
             return;
         }
@@ -421,6 +363,7 @@ void SslServer::process(const PeerData &pd)
 
         if (m_connecting_connected_list.contains(target_socket))
         {
+            DEBUG_FUNCTION(qPrintable(socket->peerAddress().toString()) << qPrintable(m_id_hash.value(socket)) << qPrintable(peer_id) << "Attempt to connect to already connected user!");
             writeWarning(socket, "User already connected!");
             return;
         }
@@ -434,6 +377,8 @@ void SslServer::process(const PeerData &pd)
         data.append(m_id_hash[socket]);
 
         m_accept_hash.insert(target_socket, socket);
+
+        DEBUG_FUNCTION(qPrintable(socket->peerAddress().toString()) << qPrintable(m_id_hash.value(socket)) << qPrintable(peer_id) << "Trying to connect to peer!");
 
         target_socket->write(getBytes<qint32>(data.size()));
         target_socket->write(data);
@@ -458,7 +403,10 @@ void SslServer::process(const PeerData &pd)
             m_connecting_connected_list.removeAll(socket);
 
             if (accepted)
+            {
+                DEBUG_FUNCTION(qPrintable(socket->peerAddress().toString()) << qPrintable(m_id_hash.value(socket)) << "User disconnected or canceled operation!");
                 writeWarning(socket, "Can't connect to user because it's disconnected or canceled operation!");
+            }
 
             return;
         }
@@ -474,6 +422,8 @@ void SslServer::process(const PeerData &pd)
             m_connecting_connected_list.removeAll(socket1);
             m_connecting_connected_list.removeAll(socket2);
 
+            DEBUG_FUNCTION(qPrintable(socket->peerAddress().toString()) << qPrintable(m_id_hash.value(socket))
+                           << qPrintable(m_id_hash.value(socket_starter)) << "User refused connection!");
             writeWarning(socket_starter, "User refused connection!");
 
             return;
@@ -505,10 +455,21 @@ void SslServer::process(const PeerData &pd)
         socket2->write(getBytes<qint32>(data1.size()));
         socket2->write(data1);
 
+        DEBUG_FUNCTION(qPrintable(socket->peerAddress().toString()) << qPrintable(m_id_hash.value(socket_starter))
+                       << qPrintable(m_id_hash.value(socket)) << "Connected!");
+
         break;
     }
     case ServerCommand::DisconnectedFromPeer:
     {
+        QSslSocket *target_socket = m_connected_1.value(socket);
+
+        if (!target_socket)
+            target_socket = m_connected_2.value(socket);
+
+        DEBUG_FUNCTION(qPrintable(socket->peerAddress().toString()) << qPrintable(m_id_hash.value(socket))
+                       << qPrintable(m_id_hash.value(target_socket)) << "Disconnected from peer!");
+
         disconnectedFromPeer(socket);
 
         break;
@@ -540,12 +501,228 @@ void SslServer::process(const PeerData &pd)
 
         break;
     }
+    case ServerCommand::XML:
+    {
+        processCommandXML(socket, data);
+
+        break;
+    }
     default:
     {
         removeSocket(socket);
         return;
     }
     }
+}
+
+void SslServer::processCommandXML(QSslSocket *socket, const QByteArray &data)
+{
+    qint32 argc;
+
+    QString cmd;
+
+    QByteArray arg1, arg2, arg3, arg4, arg5;
+
+    if (!XMLReader(data, &argc, &cmd,
+                   &arg1, &arg2, &arg3, &arg4, &arg5))
+    {
+        writeWarning(socket, "Invalid XML", true);
+        return;
+    }
+
+    if (cmd == "LOGIN")
+    {
+        QByteArray peer_negotiation_string = arg1;
+        QByteArray peer_id = arg2;
+        QByteArray password = arg3;
+        bool new_user = getValue<bool>(arg4);
+        QString code = QLatin1String(arg5);
+
+        if (peer_negotiation_string != NEGOTIATION_STRING)
+        {
+            DEBUG_FUNCTION(qPrintable(socket->peerAddress().toString()) << qPrintable(peer_id) << "Invalid NEGOTIATION STRING!");
+            writeWarning(socket, "Invalid NEGOTIATION STRING!", true);
+            return;
+        }
+
+        if (m_id_list.contains(peer_id))
+        {
+            DEBUG_FUNCTION(qPrintable(socket->peerAddress().toString()) << qPrintable(peer_id) << "This user is already connected!");
+            writeWarning(socket, "This user is already connected!", true);
+            return;
+        }
+
+        if (new_user)
+        {
+            if (m_sql.userExists("root"))
+            {
+                if (!m_code_list.contains(code))
+                {
+                    DEBUG_FUNCTION(qPrintable(socket->peerAddress().toString()) << qPrintable(peer_id) << "Invalid code!");
+                    writeWarning(socket, "Invalid code!", true);
+                    return;
+                }
+                else
+                {
+                    m_code_list.removeAll(code);
+                }
+            }
+            else if (cleanString(QLatin1String(peer_id)) != "root")
+            {
+                DEBUG_FUNCTION(qPrintable(socket->peerAddress().toString()) << qPrintable(peer_id) << "Need to create root account first!");
+                writeWarning(socket, "Need to create root account first!", true);
+                return;
+            }
+
+            if (m_sql.userExists(cleanString(QLatin1String(peer_id))))
+            {
+                DEBUG_FUNCTION(qPrintable(socket->peerAddress().toString()) << qPrintable(peer_id) << "User already exists!");
+                writeWarning(socket, "User already exists!", true);
+                return;
+            }
+            else if (!m_sql.createUser(cleanString(QLatin1String(peer_id)), cleanString(QLatin1String(password))))
+            {
+                DEBUG_FUNCTION(qPrintable(socket->peerAddress().toString()) << qPrintable(peer_id) << "Can't create new user!");
+                writeWarning(socket, "Can't create new user!", true);
+                return;
+            }
+        }
+
+        if (!m_sql.loginUser(cleanString(QLatin1String(peer_id)), cleanString(QLatin1String(password))))
+        {
+            DEBUG_FUNCTION(qPrintable(socket->peerAddress().toString()) << qPrintable(peer_id) << "Can't login with this user and password!");
+            writeWarning(socket, "Can't login with this user and password!", true);
+            return;
+        }
+
+        DEBUG_FUNCTION(qPrintable(socket->peerAddress().toString()) << qPrintable(peer_id) << "User logged in!");
+
+        m_id_list.append(peer_id);
+        m_id_hash.insert(socket, peer_id);
+
+        QByteArray data;
+        data.append(getBytes<quint8>(ServerCommand::LoggedIn));
+
+        socket->write(getBytes<qint32>(data.size()));
+        socket->write(data);
+    }
+    else if (cmd == "REQUEST_SETTINGS")
+    {
+        QString ui_path;
+        QString js_path;
+
+        QString id = QLatin1String(m_id_hash[socket]);
+
+        if (id != "root")
+        {
+            ui_path = "../data/settings.ui";
+            js_path = "../data/settings.js";
+        }
+        else
+        {
+            ui_path = "../data/settings_root.ui";
+            js_path = "../data/settings_root.js";
+        }
+
+        QFile ui_file(ui_path);
+        QFile js_file(js_path);
+
+        if (!ui_file.open(QFile::ReadOnly) || !js_file.open(QFile::ReadOnly))
+        {
+            DEBUG_FUNCTION("Can't send settings file");
+            writeWarning(socket, "Can't send settings file", true);
+            return;
+        }
+
+        QByteArray ui_data = ui_file.readAll();
+        QByteArray js_data = js_file.readAll();
+
+        QByteArray xml_data = XMLWriter("SETTINGS", ui_data, js_data);
+        writeCommandXML(socket, xml_data);
+    }
+    else if (cmd == "DELETE_ACCOUNT")
+    {
+        QString id = QLatin1String(m_id_hash[socket]);
+
+        if (id == "root")
+        {
+            DEBUG_FUNCTION(qPrintable(socket->peerAddress().toString()) << qPrintable(m_id_hash.value(socket)) << "Invalid operation!");
+            writeWarning(socket, "Invalid operation!", true);
+            return;
+        }
+
+        if (m_sql.deleteUser(id))
+        {
+            DEBUG_FUNCTION(qPrintable(socket->peerAddress().toString()) << qPrintable(m_id_hash.value(socket)) << "User deleted sucessfully!");
+            writeWarning(socket, "User deleted sucessfully!", true);
+        }
+        else
+        {
+            DEBUG_FUNCTION(qPrintable(socket->peerAddress().toString()) << qPrintable(m_id_hash.value(socket)) << "Error deleting user!");
+            writeWarning(socket, "Error deleting user!", true);
+        }
+    }
+    else if (cmd == "CHANGE_ACCOUNT_PASSWORD")
+    {
+        QByteArray password = arg1;
+
+        if (m_sql.changePassword(m_id_hash[socket], cleanString(QLatin1String(password))))
+        {
+            DEBUG_FUNCTION(qPrintable(socket->peerAddress().toString()) << qPrintable(m_id_hash.value(socket)) << "User password changed sucessfully!");
+            writeWarning(socket, "User password changed sucessfully!", true);
+        }
+        else
+        {
+            DEBUG_FUNCTION(qPrintable(socket->peerAddress().toString()) << qPrintable(m_id_hash.value(socket)) << "Error changing user password!");
+            writeWarning(socket, "Error changing user password!", true);
+        }
+    }
+    else if (cmd == "REQUEST_CODE")
+    {
+        QByteArray id = m_id_hash[socket];
+
+        if (QLatin1String(id) != "root")
+        {
+            DEBUG_FUNCTION(qPrintable(socket->peerAddress().toString()) << qPrintable(m_id_hash.value(socket)) << "Invalid operation!");
+            writeWarning(socket, "Invalid operation!", true);
+            return;
+        }
+
+        QString code;
+
+        do
+        {
+            code = QString(OpenSslLib::RANDbytes(4).toHex());
+            code.prepend("#");
+        }
+        while (m_code_list.contains(code));
+
+        m_code_list.append(code);
+
+        QTimer::singleShot(60 * 60 * 1000, [=]{
+            m_code_list.removeAll(code);
+        });
+
+        DEBUG_FUNCTION(qPrintable(socket->peerAddress().toString()) << qPrintable(m_id_hash.value(socket)) << "Sending code!");
+
+        QByteArray xml_data = XMLWriter("CODE", "edit_code", code.toLatin1());
+        writeCommandXML(socket, xml_data);
+    }
+    else
+    {
+        DEBUG_FUNCTION(qPrintable(socket->peerAddress().toString()) << qPrintable(m_id_hash.value(socket)) << "Invalid operation!");
+        writeWarning(socket, "Invalid operation!", true);
+    }
+}
+
+void SslServer::writeCommandXML(QSslSocket *socket, const QByteArray &XML)
+{
+    QByteArray data;
+    data.append(getBytes<quint8>(ServerCommand::XML));
+    data.append(XML);
+
+    socket->write(getBytes<qint32>(data.size()));
+    socket->write(data);
 }
 
 void SslServer::disconnectedPrivate()
@@ -567,6 +744,8 @@ void SslServer::removeSocket(QSslSocket *socket)
 
     QHostAddress host = socket->peerAddress();
 
+    QString peer_id = m_id_hash.value(socket);
+
     disconnectedFromPeer(socket);
 
     m_socket_hash.remove(descriptor);
@@ -586,7 +765,7 @@ void SslServer::removeSocket(QSslSocket *socket)
     //Peer disconnected, set one more available connection
     m_max_connections++;
 
-    DEBUG_FUNCTION("Disconnected:" << qPrintable(QHostAddress(host.toIPv4Address()).toString()));
+    DEBUG_FUNCTION(qPrintable(host.toString()) << qPrintable(peer_id));
 }
 
 void SslServer::writeWarning(QSslSocket *socket, const QString &message, bool remove_socket)

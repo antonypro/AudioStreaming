@@ -4,11 +4,8 @@ EncryptedServer::EncryptedServer(QObject *parent) : AbstractServer(parent)
 {
     m_max_connections = 0;
     m_auto_accept = false;
-    m_server = nullptr;
-    m_pending_socket = nullptr;
 
     m_openssl = new OpenSslLib(this);
-    SETTONULLPTR(m_openssl);
 }
 
 EncryptedServer::~EncryptedServer()
@@ -48,8 +45,6 @@ void EncryptedServer::listen(quint16 port, bool auto_accept, int max_connections
     m_id = id;
 
     m_server = new TcpServer(this);
-
-    SETTONULLPTR(m_server);
 
     m_max_connections = max_connections;
 
@@ -246,7 +241,7 @@ void EncryptedServer::writeToHost(const QByteArray &plaindata, qintptr descripto
 
 int EncryptedServer::writeToAll(const QByteArray &data)
 {
-    foreach (QTcpSocket *socket, m_socket_list)
+    for (QTcpSocket *socket : m_socket_list)
     {
         qintptr descriptor = m_descriptor_hash.value(socket);
         writeToHost(data, descriptor);

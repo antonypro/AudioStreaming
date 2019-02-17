@@ -11,13 +11,15 @@ OpusDecoderClass::OpusDecoderClass(QObject *parent) : QObject(parent)
 
 OpusDecoderClass::~OpusDecoderClass()
 {
-    if (!m_initialized)
-        return;
+    if (m_initialized)
+    {
+        m_initialized = false;
 
-    m_initialized = false;
+        /*Destroy the encoder state*/
+        opus_decoder_destroy(m_decoder);
+    }
 
-    /*Destroy the encoder state*/
-    opus_decoder_destroy(m_decoder);
+    STOP_THREAD
 }
 
 void OpusDecoderClass::startPrivate(int sample_rate, int channels, int frame_size, int max_frame_size)

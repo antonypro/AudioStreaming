@@ -2,10 +2,6 @@
 
 AudioOutput::AudioOutput(QObject *parent) : QObject(parent)
 {
-    m_audio_output = nullptr;
-    m_device = nullptr;
-    m_level_meter = nullptr;
-
     m_initialized = false;
     m_is_get_very_output_enabled = false;
     m_buffer_requested = true;
@@ -30,6 +26,11 @@ AudioOutput::AudioOutput(QObject *parent) : QObject(parent)
     START_THREAD
 }
 
+AudioOutput::~AudioOutput()
+{
+    STOP_THREAD
+}
+
 void AudioOutput::startPrivate(const QAudioDeviceInfo &devinfo,
                                const QAudioFormat &format,
                                int time_to_buffer,
@@ -44,6 +45,8 @@ void AudioOutput::startPrivate(const QAudioDeviceInfo &devinfo,
     //Check if format is supported by the choosen output device
     if (!devinfo.isFormatSupported(m_supported_format))
     {
+        QAudioFormat format_tmp = m_supported_format;
+
         m_supported_format = devinfo.nearestFormat(m_supported_format);
 
         bool found_format = true;
@@ -57,7 +60,22 @@ void AudioOutput::startPrivate(const QAudioDeviceInfo &devinfo,
 
         if (!found_format)
         {
-            emit error("Format not supported by the output device");
+            QString str1;
+            str1.append(QString("Sample size: %0 bits\n").arg(format_tmp.sampleSize()));
+            str1.append(QString("Sample rate: %0 hz\n").arg(format_tmp.sampleRate()));
+            str1.append(QString("Channels: %0\n").arg(format_tmp.channelCount()));
+            str1.append(QString("Sample type: %0\n").arg((format_tmp.sampleType()  == QAudioFormat::Float) ? "Float" : "Integer"));
+            str1.append(QString("Byte order: %0\n").arg((format_tmp.byteOrder() == QAudioFormat::LittleEndian) ? "Little endian" : "Big endian"));
+
+            QString str2;
+            str2.append(QString("Sample size: %0 bits\n").arg(m_supported_format.sampleSize()));
+            str2.append(QString("Sample rate: %0 hz\n").arg(m_supported_format.sampleRate()));
+            str2.append(QString("Channels: %0\n").arg(m_supported_format.channelCount()));
+            str2.append(QString("Sample type: %0\n").arg((m_supported_format.sampleType()  == QAudioFormat::Float) ? "Float" : "Integer"));
+            str2.append(QString("Byte order: %0\n").arg((m_supported_format.byteOrder() == QAudioFormat::LittleEndian) ? "Little endian" : "Big endian"));
+
+            emit error(QString("Format not supported by the output device\n\nFormat used:\n%0\n\nFormat supported:\n%1").arg(str1).arg(str2));
+
             return;
         }
     }
@@ -357,10 +375,13 @@ void AudioOutput::play()
             samplesX *= m_volume;
         }
 
-        if (!samples.isEmpty() && m_format != m_supported_format)
+        if (!samples.isEmpty())
         {
-            samples = convertSamplesToInt(samples, m_supported_format);
-            len = samples.size();
+            if (m_format != m_supported_format)
+            {
+                samples = convertSamplesToInt(samples, m_supported_format);
+                len = samples.size();
+            }
         }
 
         //Write data to the output device after the volume was applied

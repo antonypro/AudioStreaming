@@ -25,14 +25,14 @@ signals:
     void readyRead(QByteArray);
 
 public slots:
-    bool Start();
+    bool start();
     const QAudioFormat format();
 
 private slots:
-    void Stop();
+    void stop();
 
 private:
-    bool running;
+    bool m_running;
 
     QSemaphore sem1;
 

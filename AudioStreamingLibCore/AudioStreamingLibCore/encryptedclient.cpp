@@ -2,7 +2,6 @@
 
 EncryptedClient::EncryptedClient(QObject *parent) : AbstractClient(parent)
 {
-    m_socket = nullptr;
     m_size = 0;
 
     m_timer = new QTimer(this);
@@ -10,7 +9,6 @@ EncryptedClient::EncryptedClient(QObject *parent) : AbstractClient(parent)
     m_timer->setSingleShot(true);
 
     m_openssl = new OpenSslLib(this);
-    SETTONULLPTR(m_openssl);
 }
 
 EncryptedClient::~EncryptedClient()
@@ -35,11 +33,8 @@ bool EncryptedClient::testSsl()
 void EncryptedClient::connectToHost(const QString &host, quint16 port,
                                     const QByteArray &negotiation_string,
                                     const QString &id,
-                                    const QByteArray &password,
-                                    bool new_user)
+                                    const QByteArray &password)
 {
-    Q_UNUSED(new_user)
-
     if (!testSsl())
         return;
 
@@ -50,8 +45,6 @@ void EncryptedClient::connectToHost(const QString &host, quint16 port,
     m_id = id;
 
     m_socket = new QTcpSocket(this);
-
-    SETTONULLPTR(m_socket);
 
     connect(m_socket, &QTcpSocket::disconnected, this, &EncryptedClient::disconnectedPrivate);
     connect(m_socket, static_cast<void(QTcpSocket::*)(QTcpSocket::SocketError)>(&QTcpSocket::error), this, &EncryptedClient::errorPrivate);
@@ -65,6 +58,11 @@ void EncryptedClient::connectToHost(const QString &host, quint16 port,
     emit m_socket->readyRead();
 
     m_socket->connectToHost(host, port);
+}
+
+void EncryptedClient::writeCommandXML(const QByteArray &XML)
+{
+    Q_UNUSED(XML)
 }
 
 void EncryptedClient::connectToPeer(const QString &peer_id)
@@ -150,15 +148,11 @@ void EncryptedClient::disconnectedPrivate()
 
 void EncryptedClient::errorPrivate(QAbstractSocket::SocketError e)
 {
-    if (e != QAbstractSocket::RemoteHostClosedError)
-    {
-        QString err = m_socket->errorString();
-        emit error(err);
-    }
-    else
-    {
-        emit error(QString());
-    }
+    Q_UNUSED(e)
+
+    QString err = m_socket->errorString();
+
+    emit error(err);
 }
 
 void EncryptedClient::stop()

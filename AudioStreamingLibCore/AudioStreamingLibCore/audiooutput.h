@@ -13,6 +13,7 @@ class AudioOutput : public QObject
     Q_OBJECT
 public:
     explicit AudioOutput(QObject *parent = nullptr);
+    ~AudioOutput();
 
 signals:
     void veryOutputData(QByteArray);
@@ -43,8 +44,8 @@ private slots:
 
 private:
     bool m_initialized;
-    QAudioOutput *m_audio_output;
-    QIODevice *m_device;
+    QPointer<QAudioOutput> m_audio_output;
+    QPointer<QIODevice> m_device;
     QByteArray m_buffer;
     bool m_is_get_very_output_enabled;
     bool m_buffer_requested;
@@ -57,7 +58,7 @@ private:
     int m_max_size_to_buffer;
     QAudioFormat m_format;
     QAudioFormat m_supported_format;
-    LevelMeter *m_level_meter;
+    QPointer<LevelMeter> m_level_meter;
 
 #ifdef IS_TO_DEBUG
     qint64 m_index;

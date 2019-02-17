@@ -2,7 +2,6 @@
 
 Client::Client(QObject *parent) : AbstractClient(parent)
 {
-    m_socket = nullptr;
     m_size = 0;
 
     m_timer = new QTimer(this);
@@ -24,11 +23,9 @@ void Client::abort()
 void Client::connectToHost(const QString &host, quint16 port,
                            const QByteArray &negotiation_string,
                            const QString &id,
-                           const QByteArray &password,
-                           bool new_user)
+                           const QByteArray &password)
 {
     Q_UNUSED(password)
-    Q_UNUSED(new_user)
 
     if (m_socket)
         return;
@@ -38,8 +35,6 @@ void Client::connectToHost(const QString &host, quint16 port,
 
     m_socket = new QTcpSocket(this);
 
-    SETTONULLPTR(m_socket);
-
     connect(m_socket, &QTcpSocket::disconnected, this, &Client::disconnectedPrivate);
     connect(m_socket, static_cast<void(QTcpSocket::*)(QTcpSocket::SocketError)>(&QTcpSocket::error), this, &Client::errorPrivate);
 
@@ -48,6 +43,11 @@ void Client::connectToHost(const QString &host, quint16 port,
     m_timer->start(TIMEOUT);
 
     m_socket->connectToHost(host, port);
+}
+
+void Client::writeCommandXML(const QByteArray &XML)
+{
+    Q_UNUSED(XML)
 }
 
 void Client::connectToPeer(const QString &peer_id)
@@ -133,17 +133,11 @@ void Client::disconnectedPrivate()
 
 void Client::errorPrivate(QAbstractSocket::SocketError e)
 {
-    if (e != QAbstractSocket::RemoteHostClosedError)
-    {
-        QString err = m_socket->errorString();
-        emit error(err);
-    }
-    else
-    {
-        emit error(QString());
-    }
+    Q_UNUSED(e)
 
-    stop();
+    QString err = m_socket->errorString();
+
+    emit error(err);
 }
 
 void Client::stop()

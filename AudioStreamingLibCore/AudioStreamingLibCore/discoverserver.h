@@ -21,7 +21,7 @@ private slots:
     void readyRead();
 
 private:
-    QUdpSocket *m_server;
+    QPointer<QUdpSocket> m_server;
     QByteArray m_negotiation_string;
     QString m_id;
 };

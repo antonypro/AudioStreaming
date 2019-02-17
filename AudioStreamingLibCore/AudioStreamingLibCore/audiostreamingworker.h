@@ -43,17 +43,19 @@ signals:
     void outputLevel(float);
     void adjustSettings();
     void extraDataWritten();
+    void commandXML(QByteArray);
     void error(QString);
 
 public slots:
     void start(const StreamingInfo &streaming_info);
     void listen(quint16 port, bool auto_accept, const QByteArray &password, int max_connections);
-    void connectToHost(const QString &host, quint16 port, const QByteArray &password, bool new_user);
+    void connectToHost(const QString &host, quint16 port, const QByteArray &password);
+    void writeCommandXML(const QByteArray &XML);
     void connectToPeer(const QString &ID);
     void disconnectFromPeer();
-    void acceptSslCertificate();
     void acceptConnection();
     void rejectConnection();
+    void acceptSslCertificate();
     void writeExtraData(const QByteArray &data);
     void writeExtraDataResult();
     void inputDataBack(const QByteArray &data);
@@ -94,18 +96,18 @@ private slots:
                 qint32 *refTimeToBuffer);
 
 private:
-    DiscoverServer *m_server_discover;
-    AbstractServer *m_server;
-    AbstractClient *m_client;
-    AudioInput *m_audio_input;
-    AudioOutput *m_audio_output;
-    FlowControl *m_flow_control;
-    LevelMeter *m_level_meter_input;
-    LevelMeter *m_level_meter_output;
+    QPointer<DiscoverServer> m_server_discover;
+    QPointer<AbstractServer> m_server;
+    QPointer<AbstractClient> m_client;
+    QPointer<AudioInput> m_audio_input;
+    QPointer<AudioOutput> m_audio_output;
+    QPointer<FlowControl> m_flow_control;
+    QPointer<LevelMeter> m_level_meter_input;
+    QPointer<LevelMeter> m_level_meter_output;
 #ifdef OPUS
-    r8brain *m_resampler;
-    OpusEncoderClass *m_opus_enc;
-    OpusDecoderClass *m_opus_dec;
+    QPointer<r8brain> m_resampler;
+    QPointer<OpusEncoderClass> m_opus_enc;
+    QPointer<OpusDecoderClass> m_opus_dec;
 #endif
     bool m_input_muted;
     int m_volume;

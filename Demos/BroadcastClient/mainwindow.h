@@ -5,56 +5,13 @@
 #include <QtGui>
 #include <QtWidgets>
 #include <AudioStreamingLibCore>
+#include "common.h"
 #include "spectrumanalyzer.h"
 #include "barswidget.h"
 #include "waveformwidget.h"
 #include "levelwidget.h"
 #include "audiorecorder.h"
-
-static inline int msgBoxQuestion(const QString &title, const QString &message, QWidget *parent = nullptr)
-{
-    QMessageBox msgbox(parent);
-
-#ifdef Q_OS_MACOS
-    msgbox.setWindowModality(Qt::WindowModal);
-#endif
-    msgbox.setIcon(QMessageBox::Question);
-    msgbox.setStandardButtons(QMessageBox::Yes);
-    msgbox.addButton(QMessageBox::No);
-    msgbox.setDefaultButton(QMessageBox::Yes);
-    msgbox.setWindowTitle(title);
-    msgbox.setText(message);
-
-    return msgbox.exec();
-}
-
-static inline void msgBoxWarning(const QString &title, const QString &message, QWidget *parent = nullptr)
-{
-    QMessageBox msgbox(parent);
-
-#ifdef Q_OS_MACOS
-    msgbox.setWindowModality(Qt::WindowModal);
-#endif
-    msgbox.setIcon(QMessageBox::Warning);
-    msgbox.setWindowTitle(title);
-    msgbox.setText(message);
-
-    msgbox.exec();
-}
-
-static inline void msgBoxCritical(const QString &title, const QString &message, QWidget *parent = nullptr)
-{
-    QMessageBox msgbox(parent);
-
-#ifdef Q_OS_MACOS
-    msgbox.setWindowModality(Qt::WindowModal);
-#endif
-    msgbox.setIcon(QMessageBox::Critical);
-    msgbox.setWindowTitle(title);
-    msgbox.setText(message);
-
-    msgbox.exec();
-}
+#include "mp3recorder.h"
 
 class MainWindow : public QMainWindow
 {
@@ -67,6 +24,7 @@ signals:
     void stoprequest();
 
 private slots:
+    void initWidgets();
     void currentChanged(int index);
     void startDiscover();
     void stopDiscover();
@@ -87,10 +45,10 @@ private slots:
     void getDevInfo();
 
 private:
-    AudioStreamingLibCore *m_audio_lib;
-    AudioStreamingLibCore *m_discover_instance;
+    QPointer<AudioStreamingLibCore> m_audio_lib;
+    QPointer<AudioStreamingLibCore> m_discover_instance;
 
-    SpectrumAnalyzer *m_spectrum_analyzer;
+    QPointer<SpectrumAnalyzer> m_spectrum_analyzer;
 
     QComboBox *comboboxaudiooutput;
 
@@ -117,8 +75,10 @@ private:
 
     QPlainTextEdit *texteditlog;
 
-    AudioRecorder *m_audio_recorder;
+    QPointer<AudioRecorder> m_audio_recorder;
+    QPointer<MP3Recorder> m_audio_recorder_mp3;
     QAudioFormat m_format;
+    qint64 m_total_size;
     bool m_paused;
 };
 

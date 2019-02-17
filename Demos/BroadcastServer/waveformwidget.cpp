@@ -4,8 +4,8 @@ WaveFormWidget::WaveFormWidget(QWidget *parent) : QWidget(parent)
 {
     m_size = 0;
 
-    int maxthread = QThreadPool::globalInstance()->maxThreadCount() + 1;
-    QThreadPool::globalInstance()->setMaxThreadCount(maxthread);
+    int threads = QThreadPool::globalInstance()->maxThreadCount() + 1;
+    QThreadPool::globalInstance()->setMaxThreadCount(threads);
 
     qRegisterMetaType<QVector<QPoint> >("QVector<QPoint>");
     clear();
@@ -15,8 +15,8 @@ WaveFormWidget::~WaveFormWidget()
 {
     m_thread.waitForFinished();
 
-    int maxthread = QThreadPool::globalInstance()->maxThreadCount() - 1;
-    QThreadPool::globalInstance()->setMaxThreadCount(maxthread);
+    int threads = QThreadPool::globalInstance()->maxThreadCount() - 1;
+    QThreadPool::globalInstance()->setMaxThreadCount(threads);
 }
 
 void WaveFormWidget::start(const QAudioFormat &format)

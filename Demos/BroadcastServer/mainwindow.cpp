@@ -3,11 +3,14 @@
 #define TITLE "Broadcast Server Demo"
 
 static QPlainTextEdit *debug_edit = nullptr;
+static QMutex debug_mutex;
 
 void messageHandler(QtMsgType type, const QMessageLogContext &context, const QString &msg)
 {
     Q_UNUSED(type)
     Q_UNUSED(context)
+
+    QMutexLocker locker(&debug_mutex);
 
     if (debug_edit)
         QMetaObject::invokeMethod(debug_edit, "appendPlainText", Q_ARG(QString, msg));
@@ -19,18 +22,24 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 
     setWindowTitle(TITLE);
 
-    m_audio_lib = nullptr;
-
-    m_spectrum_analyzer = nullptr;
-
-#ifdef Q_OS_WIN
-    loopback = nullptr;
-#endif
-
-    m_audio_recorder = nullptr;
+    m_total_size = 0;
 
     m_paused = true;
 
+    initWidgets();
+
+    qInstallMessageHandler(messageHandler);
+}
+
+MainWindow::~MainWindow()
+{
+    QMutexLocker locker(&debug_mutex);
+
+    debug_edit = nullptr;
+}
+
+void MainWindow::initWidgets()
+{
     tabwidget = new QTabWidget(this);
 
     QWidget *widget = new QWidget(this);
@@ -44,11 +53,22 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     areasettings->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 #endif
 
+#ifndef Q_OS_ANDROID
+    m_ffmpeg = new FFMPEGClass(this);
+#endif
+
+    m_ffmpeg_terminating = false;
+
+    m_ffmpeg_playing = false;
+
     QWidget *widgetsettings = new QWidget(this);
 
     QGridLayout *layout1 = new QGridLayout(widgetsettings);
 
     comboboxaudioinput = new QComboBox(this);
+
+    boxlisteninput = new QCheckBox(this);
+    boxlisteninput->setText("Listen");
 
     listconnections = new QListWidget(this);
 
@@ -68,12 +88,18 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     linepassword = new QLineEdit(this);
     linepassword->setEchoMode(QLineEdit::Password);
 
+    labelvolume = new QLabel(this);
+    slidervolume = new QSlider(Qt::Horizontal, this);
+
+    slidervolume->setRange(0, 100);
+
     buttonstart->setDefault(true);
 
     texteditsettings = new QPlainTextEdit(this);
 
     layout1->addWidget(new QLabel("Input device:", this), 0, 0);
-    layout1->addWidget(comboboxaudioinput, 0, 1, 1, 2);
+    layout1->addWidget(comboboxaudioinput, 0, 1);
+    layout1->addWidget(boxlisteninput, 0, 2);
     layout1->addWidget(new QLabel("Port:", this), 1, 0);
     layout1->addWidget(lineport, 1, 1);
     layout1->addWidget(buttonstart, 1, 2);
@@ -115,7 +141,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     QWidget *recorder = new QWidget(this);
 
     QGridLayout *layout_record = new QGridLayout(recorder);
-    layout_record->addWidget(new QLabel("Wave file:", this), 0, 0);
+    layout_record->addWidget(new QLabel("Audio file:", this), 0, 0);
     layout_record->addWidget(linerecordpath, 0, 1);
     layout_record->addWidget(buttonsearch, 0, 2);
     layout_record->addWidget(buttonrecord, 0, 3);
@@ -128,6 +154,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     debug_edit = texteditlog;
 
     tabwidget->addTab(areasettings," Settings");
+#ifndef Q_OS_ANDROID
+    tabwidget->addTab(m_ffmpeg, "FFMPEG");
+#else
+    tabwidget->addTab(new QWidget(this), "FFMPEG");
+    tabwidget->setTabEnabled(1, false);
+#endif
     tabwidget->addTab(analyzer, "Analyzer");
     tabwidget->addTab(listconnections, "Connections");
     tabwidget->addTab(recorder, "Record");
@@ -135,12 +167,19 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     tabwidget->addTab(texteditlog, "Log");
 
     layout->addWidget(tabwidget, 0, 0, 1, 1);
-    layout->addWidget(level, 0, 1, 1, 1);
+    layout->addWidget(labelvolume, 1, 0, 1, 1);
+    layout->addWidget(slidervolume, 2, 0, 1, 1);
+    layout->addWidget(level, 0, 1, 3, 1);
+
+    slidervolume->setEnabled(false);
 
     texteditsettings->setReadOnly(true);
 
     texteditlog->setReadOnly(true);
 
+    connect(boxlisteninput, &QCheckBox::clicked, this, &MainWindow::boxListenInputClicked);
+
+    connect(slidervolume, &QSlider::valueChanged, this, &MainWindow::volumeChanged);
     connect(lineport, &QLineEdit::returnPressed, this, &MainWindow::start);
     connect(linemaxconnections, &QLineEdit::returnPressed, this, &MainWindow::start);
     connect(lineid, &QLineEdit::returnPressed, this, &MainWindow::start);
@@ -153,21 +192,28 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 
     resetRecordPage();
 
+#ifndef Q_OS_ANDROID
+    connect(m_ffmpeg, &FFMPEGClass::rawAudio, this, &MainWindow::ffmpegdata);
+
+    connect(m_ffmpeg, &FFMPEGClass::mediaPlay, this, &MainWindow::ffmpegplay);
+
+    connect(m_ffmpeg, &FFMPEGClass::mediaPause, this, &MainWindow::ffmpegpause);
+
+    connect(m_ffmpeg, &FFMPEGClass::mediaStop, this, &MainWindow::ffmpegstop);
+
+    connect(m_ffmpeg, &FFMPEGClass::allFinished, this, &MainWindow::ffmpegallfinished);
+#endif
+
     lineport->setText("1024");
     linemaxconnections->setText("10");
+
+    slidervolume->setValue(100);
 
     widgetsettings->setFixedHeight(widgetsettings->sizeHint().height());
 
     setCentralWidget(widget);
 
     getDevInfo();
-
-    qInstallMessageHandler(messageHandler);
-}
-
-MainWindow::~MainWindow()
-{
-    debug_edit = nullptr;
 }
 
 void MainWindow::start()
@@ -180,8 +226,8 @@ void MainWindow::start()
 
         m_audio_lib->stop();
 #ifdef Q_OS_WIN
-        if (loopback)
-            loopback->deleteLater();
+        if (m_loopback)
+            m_loopback->deleteLater();
 #endif
         return;
     }
@@ -215,50 +261,65 @@ void MainWindow::start()
 
     m_audio_lib = new AudioStreamingLibCore(this);
 
-    connect(m_audio_lib, &AudioStreamingLibCore::destroyed, [&]{m_audio_lib = nullptr;});
-
     StreamingInfo info;
 
     info.setWorkMode(StreamingInfo::StreamingWorkMode::BroadcastServer);
     info.setEncryptionEnabled(!password.isEmpty());
     info.setGetAudioEnabled(true);
+    info.setListenAudioInputEnabled(boxlisteninput->isChecked());
     info.setNegotiationString(QByteArray("BroadcastTCPDemo"));
     info.setID(lineid->text().trimmed());
 
     QAudioDeviceInfo inputdevinfo = comboboxaudioinput->currentData().value<QAudioDeviceInfo>();
 
-#ifdef Q_OS_WIN
     if (inputdevinfo.isNull())
     {
-        QAudioFormat format;
-
-        loopback = new QWinLoopback(this);
-
-        connect(loopback, &QObject::destroyed, this, [this]
+#ifdef Q_OS_WIN
+        if (comboboxaudioinput->currentData(Qt::UserRole + 1).value<int>() == AudioInputInfo::Loopback)
         {
-            loopback = nullptr;
+            m_loopback = new QWinLoopback(this);
 
-            if (isVisible())
-                buffer.clear();
-        });
+            connect(m_loopback, &QObject::destroyed, this, [=]
+            {
+                if (isVisible())
+                    m_buffer.clear();
+            });
 
-        bool started = loopback->Start();
+            bool started = m_loopback->start();
 
-        if (!started)
-            return;
+            if (!started)
+                return;
 
-        info.setInputDeviceType(StreamingInfo::AudioDeviceType::CustomAudioDevice);
-        info.setCallBackEnabled(true);
+            info.setInputDeviceType(StreamingInfo::AudioDeviceType::CustomAudioDevice);
+            info.setCallBackEnabled(true);
 
-        format = loopback->format();
+            QAudioFormat format = m_loopback->format();
 
-        connect(loopback, &QWinLoopback::readyRead, this, &MainWindow::loopbackdata);
-        connect(m_audio_lib, &AudioStreamingLibCore::inputData, this, &MainWindow::process);
+            connect(m_loopback, &QWinLoopback::readyRead, this, &MainWindow::loopbackdata);
+            connect(m_audio_lib, &AudioStreamingLibCore::inputData, this, &MainWindow::process);
 
-        info.setInputAudioFormat(format);
+            info.setInputAudioFormat(format);
+        }
+        else //FFMPEG
+#endif
+        {
+            QAudioFormat format;
+
+            format.setSampleSize(32);
+            format.setSampleRate(48000);
+            format.setChannelCount(2);
+            format.setSampleType(QAudioFormat::Float);
+            format.setByteOrder(QAudioFormat::LittleEndian);
+
+            info.setInputDeviceType(StreamingInfo::AudioDeviceType::CustomAudioDevice);
+            info.setCallBackEnabled(true);
+
+            connect(m_audio_lib, &AudioStreamingLibCore::inputData, this, &MainWindow::process);
+
+            info.setInputAudioFormat(format);
+        }
     }
     else
-#endif
     {
         info.setInputDeviceInfo(inputdevinfo);
 
@@ -281,6 +342,7 @@ void MainWindow::start()
     linechannels->setEnabled(false);
 
     comboboxaudioinput->setEnabled(false);
+    boxlisteninput->setEnabled(false);
     buttonstart->setText("Stop Server");
 
     buttonrecord->setEnabled(true);
@@ -294,12 +356,19 @@ void MainWindow::start()
 
     m_audio_lib->start(info);
 
+    if (info.isListenAudioInputEnabled())
+        m_audio_lib->setVolume(slidervolume->value());
+
     m_audio_lib->listen(quint16(port), true, password, max_connections);
 
     boxautostart->setEnabled(false);
 
     if (boxautostart->isChecked())
         startPauseRecord(); //Auto start recording when server starts
+
+#ifndef Q_OS_ANDROID
+    m_ffmpeg->setReadingEnabled(true);
+#endif
 
     QString title = QString("%0 connection(s) - %1").arg(0).arg(TITLE);
 
@@ -309,29 +378,76 @@ void MainWindow::start()
 void MainWindow::loopbackdata(const QByteArray &data)
 {
 #ifdef Q_OS_WIN
-    if (!loopback)
+    if (!m_loopback)
         return;
-    buffer.append(data);
+
+    m_buffer.append(data);
 #else
     Q_UNUSED(data)
 #endif
 }
 
-void MainWindow::process(const QByteArray &data)
+void MainWindow::ffmpegdata(const QByteArray &data)
 {
-#ifdef Q_OS_WIN
     if (!m_audio_lib || !m_audio_lib->isRunning())
        return;
 
+    m_buffer.append(data);
+}
+
+void MainWindow::ffmpegplay()
+{
+    m_ffmpeg_terminating = false;
+    m_ffmpeg_playing = true;
+}
+
+void MainWindow::ffmpegpause()
+{
+    m_ffmpeg_playing = false;
+}
+
+void MainWindow::ffmpegstop()
+{
+    m_ffmpeg_playing = false;
+    m_buffer.clear();
+}
+
+void MainWindow::ffmpegallfinished()
+{
+    m_ffmpeg_terminating = true;
+}
+
+void MainWindow::process(const QByteArray &data)
+{
+    if (!m_audio_lib || !m_audio_lib->isRunning())
+       return;
+
+    bool loopback = (comboboxaudioinput->currentData(Qt::UserRole + 1).value<int>() == AudioInputInfo::Loopback);
+
     int size = data.size();
 
-    QByteArray mid = buffer.mid(0, size);
-    buffer.remove(0, size);
+    QByteArray mid = data;
+
+    if (loopback || m_ffmpeg_playing)
+    {
+        if (m_buffer.size() >= size)
+        {
+            mid = m_buffer.mid(0, size);
+            m_buffer.remove(0, size);
+        }
+        else if (m_ffmpeg_terminating)
+        {
+            m_ffmpeg_terminating = false;
+            m_ffmpeg_playing = false;
+        }
+    }
+
+#ifndef Q_OS_ANDROID
+    if (m_ffmpeg_playing && SIZETOTIME(m_buffer.size()) < 1000)
+        m_ffmpeg->read();
+#endif
 
     m_audio_lib->inputDataBack(mid);
-#else
-    Q_UNUSED(data)
-#endif
 }
 
 void MainWindow::adjustSettings()
@@ -359,6 +475,12 @@ void MainWindow::adjustSettings()
     str.append(QString("Sample type: %0\n").arg((format.sampleType()  == QAudioFormat::Float) ? "Float" : "Integer"));
     str.append(QString("Byte order: %0").arg((format.byteOrder() == QAudioFormat::LittleEndian) ? "Little endian" : "Big endian"));
 
+    str.append("\n\n");
+
+    str.append("Eigen instructions set:\n");
+
+    str.append(AudioStreamingLibCore::EigenInstructionsSet());
+
     texteditsettings->setPlainText(str);
 
     if (!m_spectrum_analyzer)
@@ -375,8 +497,6 @@ void MainWindow::adjustSettings()
         connect(this, &MainWindow::destroyed, m_spectrum_analyzer, &SpectrumAnalyzer::deleteLater);
         connect(m_spectrum_analyzer, &SpectrumAnalyzer::destroyed, thread, &QThread::quit);
         connect(thread, &QThread::finished, thread, &QThread::deleteLater);
-
-        connect(m_spectrum_analyzer, &SpectrumAnalyzer::destroyed, [&]{m_spectrum_analyzer = nullptr;});
 
         QMetaObject::invokeMethod(m_spectrum_analyzer, "start", Qt::QueuedConnection, Q_ARG(QAudioFormat, format));
 
@@ -396,40 +516,78 @@ void MainWindow::adjustSettings()
 
 void MainWindow::setRecordPath()
 {
-    QString path = QFileDialog::getSaveFileName(this, "Select the wave path", QString(), "WAVE (*.wav)");
+    QString selected_filter;
+    QString path = QFileDialog::getSaveFileName(this, "Select the audio path", QString(),
+                                                "WAVE (*.wav);;MP3 (*.mp3)", &selected_filter,
+                                                QFileDialog::DontConfirmOverwrite);
 
     if (path.isEmpty())
         return;
+
+    if (selected_filter == "WAVE (*.wav)" && !path.endsWith(".wav", Qt::CaseInsensitive))
+        path.append(".wav");
+    else if (selected_filter == "MP3 (*.mp3)" && !path.endsWith(".mp3", Qt::CaseInsensitive))
+        path.append(".mp3");
 
     linerecordpath->setText(QDir::toNativeSeparators(path));
 }
 
 void MainWindow::startPauseRecord()
 {
+    if (!m_audio_recorder && !m_audio_recorder_mp3)
+    {
+        if (QFileInfo(linerecordpath->text()).exists())
+        {
+            int result = msgBoxQuestion("File already exists",
+                                        QString("File %0 already exists. Replace it?")
+                                        .arg(QFileInfo(linerecordpath->text()).fileName()), this);
+
+            if (result != QMessageBox::Yes)
+                return;
+        }
+    }
+
     if (m_paused)
     {
-        if (!m_audio_recorder)
+        linerecordpath->setEnabled(false);
+        buttonsearch->setEnabled(false);
+        buttonrecordstop->setEnabled(true);
+
+        m_format = m_audio_lib->audioFormat();
+        //Change to compatible settings
+        m_format.setSampleSize(16);
+        m_format.setSampleType(QAudioFormat::SignedInt);
+
+        if (!linerecordpath->text().endsWith(".mp3"))
         {
-            linerecordpath->setEnabled(false);
-            buttonsearch->setEnabled(false);
-            buttonrecordstop->setEnabled(true);
-
-            m_format = m_audio_lib->audioFormat();
-            //Change to compatible settings
-            m_format.setSampleSize(16);
-            m_format.setSampleType(QAudioFormat::SignedInt);
-
-            m_audio_recorder = new AudioRecorder(linerecordpath->text(), m_format, m_audio_lib);
-
-            connect(m_audio_recorder, &AudioRecorder::destroyed, [&]{m_audio_recorder = nullptr;});
-
-            if (!m_audio_recorder->open())
+            if (!m_audio_recorder)
             {
-                stopRecord();
+                m_audio_recorder = new AudioRecorder(linerecordpath->text(), m_format, m_audio_lib);
 
-                msgBoxCritical("Error", "Error openning file for record!", this);
+                if (!m_audio_recorder->open())
+                {
+                    stopRecord();
 
-                return;
+                    msgBoxCritical("Error", "Error openning wave file for record!", this);
+
+                    return;
+                }
+            }
+        }
+        else
+        {
+            if (!m_audio_recorder_mp3)
+            {
+                m_audio_recorder_mp3 = new MP3Recorder(this);
+
+                if (!m_audio_recorder_mp3->start(linerecordpath->text(), m_format, 128))
+                {
+                    stopRecord();
+
+                    msgBoxCritical("Error", "Error openning mp3 file for record!", this);
+
+                    return;
+                }
             }
         }
 
@@ -456,6 +614,13 @@ void MainWindow::stopRecord()
         disconnect(m_audio_lib, &AudioStreamingLibCore::veryInputData, this, &MainWindow::writeToFile);
         m_audio_recorder->deleteLater();
     }
+    else if (m_audio_recorder_mp3)
+    {
+        disconnect(m_audio_lib, &AudioStreamingLibCore::veryInputData, this, &MainWindow::writeToFile);
+        m_audio_recorder_mp3->deleteLater();
+    }
+
+    m_total_size = 0;
 
     linerecordpath->setEnabled(true);
     buttonsearch->setEnabled(true);
@@ -483,9 +648,14 @@ void MainWindow::resetRecordPage()
 
 void MainWindow::writeToFile(const QByteArray &data)
 {
-    m_audio_recorder->write(AudioStreamingLibCore::convertFloatToInt16(data));
+    if (m_audio_recorder)
+        m_audio_recorder->write(AudioStreamingLibCore::convertFloatToInt16(data));
+    else if (m_audio_recorder_mp3)
+        m_audio_recorder_mp3->encode(AudioStreamingLibCore::convertFloatToInt16(data));
 
-    int recorded = int(AudioStreamingLibCore::sizeToTime(m_audio_recorder->size() - 44, m_format));
+    m_total_size += data.size() / int(sizeof(float) / sizeof(qint16));
+
+    int recorded = int(AudioStreamingLibCore::sizeToTime(m_total_size, m_format));
 
     QTime time = QTime(0, 0, 0).addMSecs(recorded);
 
@@ -498,12 +668,29 @@ void MainWindow::updateConnections()
 
     listconnections->clear();
 
-    foreach (const QHostAddress &addr, connections)
+    for (const QHostAddress &addr : connections)
         listconnections->addItem(addr.toString());
 
     QString title = QString("%0 connection(s) - %1").arg(connections.size()).arg(TITLE);
 
     setWindowTitle(title);
+}
+
+void MainWindow::boxListenInputClicked(bool checked)
+{
+    slidervolume->setEnabled(checked);
+
+    if (!checked)
+        slidervolume->setValue(100);
+}
+
+void MainWindow::volumeChanged(int volume)
+{
+    if (m_audio_lib)
+        m_audio_lib->setVolume(volume);
+
+    QString str = QString("Volume: %0").arg(volume);
+    labelvolume->setText(str);
 }
 
 void MainWindow::error(const QString &error)
@@ -517,6 +704,10 @@ void MainWindow::finished()
     if (!isVisible())
         return;
 
+#ifndef Q_OS_ANDROID
+    m_ffmpeg->setReadingEnabled(false);
+#endif
+
     stopRecord();
     resetRecordPage();
 
@@ -529,6 +720,7 @@ void MainWindow::finished()
 
     currentIndexChanged(comboboxaudioinput->currentIndex());
 
+    boxlisteninput->setEnabled(true);
     comboboxaudioinput->setEnabled(true);
     buttonstart->setText("Start Server");
 
@@ -539,17 +731,29 @@ void MainWindow::finished()
     if (m_audio_lib)
         m_audio_lib->deleteLater();
 
+    m_buffer.clear();
+
     setWindowTitle(TITLE);
 
 #ifdef Q_OS_WIN
-        if (loopback)
-            loopback->deleteLater();
+        if (m_loopback)
+            m_loopback->deleteLater();
 #endif
 }
 
 void MainWindow::currentIndexChanged(int index)
 {
-    bool disable = (QSysInfo::windowsVersion() >= QSysInfo::WV_VISTA && index == 0);
+    //Disable some settings if in Loopback or FFMPEG mode
+    bool disable = (comboboxaudioinput->itemData(index, Qt::UserRole + 1) != int(AudioInputInfo::Other));
+
+#ifndef Q_OS_ANDROID
+    bool enabled = (comboboxaudioinput->itemData(index, Qt::UserRole + 1) == int(AudioInputInfo::FFMPEG));
+    tabwidget->setTabEnabled(1, enabled);
+    if (!enabled)
+        m_ffmpeg->clearPlayList();
+#else
+    tabwidget->setTabEnabled(1, false);
+#endif
 
     if (disable)
     {
@@ -572,12 +776,23 @@ void MainWindow::currentIndexChanged(int index)
 void MainWindow::getDevInfo()
 {
     if (QSysInfo::windowsVersion() >= QSysInfo::WV_VISTA)
+    {
         comboboxaudioinput->addItem("Loopback (What you hear)");
+        comboboxaudioinput->setItemData(comboboxaudioinput->count() - 1, qVariantFromValue(int(AudioInputInfo::Loopback)), Qt::UserRole + 1);
+    }
+
+#ifndef Q_OS_ANDROID
+    comboboxaudioinput->addItem("FFMPEG");
+    comboboxaudioinput->setItemData(comboboxaudioinput->count() - 1, qVariantFromValue(int(AudioInputInfo::FFMPEG)), Qt::UserRole + 1);
+#endif
 
     QList<QAudioDeviceInfo> inputdevices = QAudioDeviceInfo::availableDevices(QAudio::AudioInput);
 
     for (int i = 0; i < inputdevices.size(); i++)
+    {
         comboboxaudioinput->addItem(inputdevices.at(i).deviceName(), qVariantFromValue(inputdevices.at(i)));
+        comboboxaudioinput->setItemData(comboboxaudioinput->count() - 1, qVariantFromValue(int(AudioInputInfo::Other)), Qt::UserRole + 1);
+    }
 
     if (comboboxaudioinput->count() == 0)
         msgBoxWarning("Error", "No input device found!", this);

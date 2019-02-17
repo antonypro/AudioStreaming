@@ -3,11 +3,14 @@
 #define TITLE "Broadcast Client Demo"
 
 static QPlainTextEdit *debug_edit = nullptr;
+static QMutex debug_mutex;
 
 void messageHandler(QtMsgType type, const QMessageLogContext &context, const QString &msg)
 {
     Q_UNUSED(type)
     Q_UNUSED(context)
+
+    QMutexLocker locker(&debug_mutex);
 
     if (debug_edit)
         QMetaObject::invokeMethod(debug_edit, "appendPlainText", Q_ARG(QString, msg));
@@ -19,13 +22,24 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 
     setWindowTitle(TITLE);
 
-    m_audio_lib = nullptr;
     m_discover_instance = new AudioStreamingLibCore(this);
 
-    m_spectrum_analyzer = nullptr;
+    m_total_size = 0;
 
-    m_audio_recorder = nullptr;
+    initWidgets();
 
+    qInstallMessageHandler(messageHandler);
+}
+
+MainWindow::~MainWindow()
+{
+    QMutexLocker locker(&debug_mutex);
+
+    debug_edit = nullptr;
+}
+
+void MainWindow::initWidgets()
+{
     comboboxaudiooutput = new QComboBox(this);
 
     QWidget *widget = new QWidget(this);
@@ -98,7 +112,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     QWidget *recorder = new QWidget(this);
 
     QGridLayout *layout_record = new QGridLayout(recorder);
-    layout_record->addWidget(new QLabel("Wave file:", this), 0, 0);
+    layout_record->addWidget(new QLabel("Audio file:", this), 0, 0);
     layout_record->addWidget(linerecordpath, 0, 1);
     layout_record->addWidget(buttonsearch, 0, 2);
     layout_record->addWidget(buttonrecord, 0, 3);
@@ -154,13 +168,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     linetime->setText("0");
 
     getDevInfo();
-
-    qInstallMessageHandler(messageHandler);
-}
-
-MainWindow::~MainWindow()
-{
-    debug_edit = nullptr;
 }
 
 void MainWindow::currentChanged(int index)
@@ -250,8 +257,6 @@ void MainWindow::start()
 
     m_audio_lib = new AudioStreamingLibCore(this);
 
-    connect(m_audio_lib, &AudioStreamingLibCore::destroyed, [&]{m_audio_lib = nullptr;});
-
     QByteArray password = linepassword->text().toLatin1();
 
     StreamingInfo info;
@@ -283,6 +288,7 @@ void MainWindow::adjustSettings()
 {
     QAudioFormat inputFormat = m_audio_lib->inputAudioFormat();
     QAudioFormat format = m_audio_lib->audioFormat();
+    qint32 bufferTime = m_audio_lib->streamingInfo().timeToBuffer();
 
     QString str;
 
@@ -304,7 +310,13 @@ void MainWindow::adjustSettings()
     str.append(QString("Sample type: %0\n").arg((format.sampleType()  == QAudioFormat::Float) ? "Float" : "Integer"));
     str.append(QString("Byte order: %0\n").arg((format.byteOrder() == QAudioFormat::LittleEndian) ? "Little endian" : "Big endian"));
 
-    str.append(QString("\nBuffer time: %0 ms").arg(m_audio_lib->streamingInfo().timeToBuffer()));
+    str.append(QString("\nBuffer time: %0 ms%1").arg(bufferTime).arg(bufferTime == 0 ? ("(Smart buffer)") : QString()));
+
+    str.append("\n\n");
+
+    str.append("Eigen instructions set:\n");
+
+    str.append(AudioStreamingLibCore::EigenInstructionsSet());
 
     texteditsettings->setPlainText(str);
 
@@ -322,8 +334,6 @@ void MainWindow::adjustSettings()
         connect(this, &MainWindow::destroyed, m_spectrum_analyzer, &SpectrumAnalyzer::deleteLater);
         connect(m_spectrum_analyzer, &SpectrumAnalyzer::destroyed, thread, &QThread::quit);
         connect(thread, &QThread::finished, thread, &QThread::deleteLater);
-
-        connect(m_spectrum_analyzer, &SpectrumAnalyzer::destroyed, [&]{m_spectrum_analyzer = nullptr;});
 
         QMetaObject::invokeMethod(m_spectrum_analyzer, "start", Qt::QueuedConnection, Q_ARG(QAudioFormat, format));
 
@@ -347,40 +357,78 @@ void MainWindow::adjustSettings()
 
 void MainWindow::setRecordPath()
 {
-    QString path = QFileDialog::getSaveFileName(this, "Select the wave path", QString(), "WAVE (*.wav)");
+    QString selected_filter;
+    QString path = QFileDialog::getSaveFileName(this, "Select the audio path", QString(),
+                                                "WAVE (*.wav);;MP3 (*.mp3)", &selected_filter,
+                                                QFileDialog::DontConfirmOverwrite);
 
     if (path.isEmpty())
         return;
+
+    if (selected_filter == "WAVE (*.wav)" && !path.endsWith(".wav", Qt::CaseInsensitive))
+        path.append(".wav");
+    else if (selected_filter == "MP3 (*.mp3)" && !path.endsWith(".mp3", Qt::CaseInsensitive))
+        path.append(".mp3");
 
     linerecordpath->setText(QDir::toNativeSeparators(path));
 }
 
 void MainWindow::startPauseRecord()
 {
+    if (!m_audio_recorder && !m_audio_recorder_mp3)
+    {
+        if (QFileInfo(linerecordpath->text()).exists())
+        {
+            int result = msgBoxQuestion("File already exists",
+                                        QString("File %0 already exists. Replace it?")
+                                        .arg(QFileInfo(linerecordpath->text()).fileName()), this);
+
+            if (result != QMessageBox::Yes)
+                return;
+        }
+    }
+
     if (m_paused)
     {
-        if (!m_audio_recorder)
+        linerecordpath->setEnabled(false);
+        buttonsearch->setEnabled(false);
+        buttonrecordstop->setEnabled(true);
+
+        m_format = m_audio_lib->audioFormat();
+        //Change to compatible settings
+        m_format.setSampleSize(16);
+        m_format.setSampleType(QAudioFormat::SignedInt);
+
+        if (!linerecordpath->text().endsWith(".mp3"))
         {
-            linerecordpath->setEnabled(false);
-            buttonsearch->setEnabled(false);
-            buttonrecordstop->setEnabled(true);
-
-            m_format = m_audio_lib->audioFormat();
-            //Change to compatible settings
-            m_format.setSampleSize(16);
-            m_format.setSampleType(QAudioFormat::SignedInt);
-
-            m_audio_recorder = new AudioRecorder(linerecordpath->text(), m_format, m_audio_lib);
-
-            connect(m_audio_recorder, &AudioRecorder::destroyed, [&]{m_audio_recorder = nullptr;});
-
-            if (!m_audio_recorder->open())
+            if (!m_audio_recorder)
             {
-                stopRecord();
+                m_audio_recorder = new AudioRecorder(linerecordpath->text(), m_format, m_audio_lib);
 
-                msgBoxCritical("Error", "Error openning file for record!", this);
+                if (!m_audio_recorder->open())
+                {
+                    stopRecord();
 
-                return;
+                    msgBoxCritical("Error", "Error openning wave file for record!", this);
+
+                    return;
+                }
+            }
+        }
+        else
+        {
+            if (!m_audio_recorder_mp3)
+            {
+                m_audio_recorder_mp3 = new MP3Recorder(this);
+
+                if (!m_audio_recorder_mp3->start(linerecordpath->text(), m_format, 128))
+                {
+                    stopRecord();
+
+                    msgBoxCritical("Error", "Error openning mp3 file for record!", this);
+
+                    return;
+                }
             }
         }
 
@@ -404,9 +452,16 @@ void MainWindow::stopRecord()
 {
     if (m_audio_recorder)
     {
-        disconnect(m_audio_lib, &AudioStreamingLibCore::veryOutputData, this, &MainWindow::writeToFile);
+        disconnect(m_audio_lib, &AudioStreamingLibCore::veryInputData, this, &MainWindow::writeToFile);
         m_audio_recorder->deleteLater();
     }
+    else if (m_audio_recorder_mp3)
+    {
+        disconnect(m_audio_lib, &AudioStreamingLibCore::veryInputData, this, &MainWindow::writeToFile);
+        m_audio_recorder_mp3->deleteLater();
+    }
+
+    m_total_size = 0;
 
     linerecordpath->setEnabled(true);
     buttonsearch->setEnabled(true);
@@ -434,9 +489,14 @@ void MainWindow::resetRecordPage()
 
 void MainWindow::writeToFile(const QByteArray &data)
 {
-    m_audio_recorder->write(AudioStreamingLibCore::convertFloatToInt16(data));
+    if (m_audio_recorder)
+        m_audio_recorder->write(AudioStreamingLibCore::convertFloatToInt16(data));
+    else if (m_audio_recorder_mp3)
+        m_audio_recorder_mp3->encode(AudioStreamingLibCore::convertFloatToInt16(data));
 
-    int recorded = int(AudioStreamingLibCore::sizeToTime(m_audio_recorder->size() - 44, m_format));
+    m_total_size += data.size() / int(sizeof(float) / sizeof(qint16));
+
+    int recorded = int(AudioStreamingLibCore::sizeToTime(m_total_size, m_format));
 
     QTime time = QTime(0, 0, 0).addMSecs(recorded);
 

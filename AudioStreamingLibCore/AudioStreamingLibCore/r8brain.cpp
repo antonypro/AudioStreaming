@@ -17,14 +17,16 @@ r8brain::r8brain(QObject *parent) : QObject(parent)
 
 r8brain::~r8brain()
 {
-    if (!m_initialized)
-        return;
+    if (m_initialized)
+    {
+        m_initialized = false;
 
-    m_initialized = false;
+        delete[] m_InBufs;
+        delete[] m_Resamps;
+        delete[] m_opp;
+    }
 
-    delete[] m_InBufs;
-    delete[] m_Resamps;
-    delete[] m_opp;
+    STOP_THREAD
 }
 
 void r8brain::startPrivate(int in_sample_rate, int out_sample_rate, int channels, int sample_size)

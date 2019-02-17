@@ -3,8 +3,8 @@
 #include "sslserver.h"
 #include "common.h"
 
-static QFile *log_file = nullptr;
-QSettings *global_settings = nullptr;
+static QPointer<QFile> log_file = nullptr;
+QPointer<QSettings> global_settings = nullptr;
 
 void messageOutput(QtMsgType type, const QMessageLogContext &context, const QString &msg)
 {
@@ -55,8 +55,6 @@ int main(int argc, char *argv[])
 
     log_file = &file;
 
-    SETTONULLPTR(log_file);
-
     if (!log_file->open(QFile::WriteOnly | QFile::Text | QFile::Append))
     {
         qInstallMessageHandler(nullptr);
@@ -66,8 +64,6 @@ int main(int argc, char *argv[])
     QSettings settings("../data/settings.ini", QSettings::IniFormat);
 
     global_settings = &settings;
-
-    SETTONULLPTR(global_settings);
 
     DEBUG_FUNCTION("Session started!");
 

@@ -10,6 +10,7 @@ class AudioInput : public QObject
     Q_OBJECT
 public:
     explicit AudioInput(QObject *parent = nullptr);
+    ~AudioInput();
 
 signals:
     void error(QString);
@@ -24,8 +25,8 @@ private slots:
     void readyReadPrivate();
 
 private:
-    QAudioInput *m_audio_input;
-    QIODevice *m_device;
+    QPointer<QAudioInput> m_audio_input;
+    QPointer<QIODevice> m_device;
     QAudioFormat m_format;
     QAudioFormat m_supported_format;
 };

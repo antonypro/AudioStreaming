@@ -5,102 +5,11 @@
 #include <QtGui>
 #include <QtWidgets>
 #include <AudioStreamingLibCore>
+#include "common.h"
+#include "settings.h"
 #include "levelwidget.h"
 #include "audiorecorder.h"
-
-static inline QString cleanString(const QString &s)
-{
-    QString diacriticLetters;
-    QStringList noDiacriticLetters;
-    QStringList acceptedCharacters;
-
-    diacriticLetters = QString::fromUtf8("ŠŒŽšœžŸ¥µÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖØÙÚÛÜÝßàáâãäåæçèéêëìíîïðñòóôõöøùúûüýÿ");
-    noDiacriticLetters << "S"<<"OE"<<"Z"<<"s"<<"oe"<<"z"<<"Y"<<"Y"<<"u"<<"A"<<"A"<<"A"<<"A"<<"A"<<"A"<<"AE"<<"C"
-                        <<"E"<<"E"<<"E"<<"E"<<"I"<<"I"<<"I"<<"I"<<"D"<<"N"<<"O"<<"O"<<"O"<<"O"<<"O"<<"O"<<"U"<<"U"
-                       <<"U"<<"U"<<"Y"<<"s"<<"a"<<"a"<<"a"<<"a"<<"a"<<"a"<<"ae"<<"c"<<"e"<<"e"<<"e"<<"e"<<"i"<<"i"
-                      <<"i"<<"i"<<"o"<<"n"<<"o"<<"o"<<"o"<<"o"<<"o"<<"o"<<"u"<<"u"<<"u"<<"u"<<"y"<<"y";
-
-    acceptedCharacters << "0" << "1" << "2" << "3" << "4" << "5" << "6" << "7" << "8" << "9"
-                       << "a" << "b" << "c" << "d" << "e" << "f" << "g" << "h" << "i" << "j"
-                       << "k" << "l" << "m" << "n" << "o" << "p" << "q" << "r" << "s" << "t"
-                       << "u" << "v" << "w" << "x" << "y" << "z";
-
-    QString output_tmp;
-
-    for (int i = 0; i < s.length(); i++)
-    {
-        QChar c = s[i];
-        int dIndex = diacriticLetters.indexOf(c);
-        if (dIndex < 0)
-        {
-            output_tmp.append(c);
-        }
-        else
-        {
-            QString replacement = noDiacriticLetters[dIndex];
-            output_tmp.append(replacement);
-        }
-    }
-
-    output_tmp = output_tmp.toLower();
-
-    QString output;
-
-    for (int i = 0; i < output_tmp.length(); i++)
-    {
-        QChar c = output_tmp[i];
-
-        if (acceptedCharacters.contains(c))
-            output.append(c);
-    }
-
-    return output;
-}
-
-static inline int msgBoxQuestion(const QString &title, const QString &message, QWidget *parent = nullptr)
-{
-    QMessageBox msgbox(parent);
-
-#ifdef Q_OS_MACOS
-    msgbox.setWindowModality(Qt::WindowModal);
-#endif
-    msgbox.setIcon(QMessageBox::Question);
-    msgbox.setStandardButtons(QMessageBox::Yes);
-    msgbox.addButton(QMessageBox::No);
-    msgbox.setDefaultButton(QMessageBox::Yes);
-    msgbox.setWindowTitle(title);
-    msgbox.setText(message);
-
-    return msgbox.exec();
-}
-
-static inline void msgBoxWarning(const QString &title, const QString &message, QWidget *parent = nullptr)
-{
-    QMessageBox msgbox(parent);
-
-#ifdef Q_OS_MACOS
-    msgbox.setWindowModality(Qt::WindowModal);
-#endif
-    msgbox.setIcon(QMessageBox::Warning);
-    msgbox.setWindowTitle(title);
-    msgbox.setText(message);
-
-    msgbox.exec();
-}
-
-static inline void msgBoxCritical(const QString &title, const QString &message, QWidget *parent = nullptr)
-{
-    QMessageBox msgbox(parent);
-
-#ifdef Q_OS_MACOS
-    msgbox.setWindowModality(Qt::WindowModal);
-#endif
-    msgbox.setIcon(QMessageBox::Critical);
-    msgbox.setWindowTitle(title);
-    msgbox.setText(message);
-
-    msgbox.exec();
-}
+#include "mp3recorder.h"
 
 class MainWindow : public QMainWindow
 {
@@ -113,12 +22,13 @@ signals:
     void stoprequest();
 
 private slots:
+    void initWidgets();
     void currentChanged(int index);
     void startDiscover();
     void stopDiscover();
     void peerFound(const QHostAddress &address, const QString &id);
     void selectPeer(QListWidgetItem *item);
-    void webClient();
+    void webClient(const QString &username, const QString &password, bool new_user = false, const QString &code = QString());
     void client();
     void server();
     void sliderVolumeValueChanged(int value);
@@ -154,8 +64,10 @@ private:
     QString m_peer;
     bool m_connecting_connected_to_peer;
 
-    AudioStreamingLibCore *m_audio_lib;
-    AudioStreamingLibCore *m_discover_instance;
+    QPointer<AudioStreamingLibCore> m_audio_lib;
+    QPointer<AudioStreamingLibCore> m_discover_instance;
+
+    Settings *websettings;
 
     QListWidget *listwidgetpeers;
 
@@ -205,6 +117,7 @@ private:
     QLabel *labelclientid;
     QLabel *labelserverid;
 
+    QLabel *labelwebcode;
     QLabel *labelwebpassword;
     QLabel *labelclientpassword;
     QLabel *labelserverpassword;
@@ -216,6 +129,8 @@ private:
     QLineEdit *linewebpassword;
     QLineEdit *lineclientpassword;
     QLineEdit *lineserverpassword;
+
+    QLineEdit *linewebcode;
 
     QPushButton *buttonsigninweb;
     QPushButton *buttonsignupweb;
@@ -238,14 +153,18 @@ private:
 
     QPlainTextEdit *texteditlog;
 
-    AudioRecorder *m_audio_recorder;
+    QPointer<AudioRecorder> m_audio_recorder;
+    QPointer<MP3Recorder> m_audio_recorder_mp3;
     QAudioFormat m_format;
+    qint64 m_total_size;
     bool m_paused;
 
     QByteArray m_local_audio;
     QByteArray m_peer_audio;
 
     bool m_msgbox_visible;
+
+    QByteArray m_web_login_xml;
 };
 
 #endif // MAINWINDOW_H

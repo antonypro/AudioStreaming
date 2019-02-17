@@ -3,7 +3,6 @@
 
 DiscoverClient::DiscoverClient(QObject *parent) : QObject(parent)
 {
-    m_socket = nullptr;
     m_port = 0;
 }
 
@@ -17,24 +16,54 @@ void DiscoverClient::discover(quint16 port, const QByteArray &negotiation_string
 
     connect(m_socket, &QUdpSocket::readyRead, this, &DiscoverClient::readyRead);
 
-    foreach (const QHostAddress &address, QNetworkInterface::allAddresses())
-    {
-        if (address.protocol() == QAbstractSocket::IPv4Protocol)
-        {
-            QStringList list = address.toString().split(".");
-            list.replace(3, "255");
-            m_address_list.append(QHostAddress(list.join('.')));
-        }
-    }
+    updateListEndpoints();
 
     QTimer *timer = new QTimer(this);
     connect(timer, &QTimer::timeout, this, &DiscoverClient::write);
     timer->start(100);
 }
 
+void DiscoverClient::updateListEndpoints()
+{
+    m_address_list.clear();
+
+    for (const QHostAddress &address : QNetworkInterface::allAddresses())
+    {
+        if (address.protocol() == QAbstractSocket::IPv4Protocol && address != QHostAddress(QHostAddress::LocalHost))
+        {
+            quint32 ip = address.toIPv4Address();
+
+            quint8 octets[4];
+            quint32 parts[4];
+
+            for (int i = 1; i <= 4; i++)
+            {
+                quint32 num = (ip / quint32(qPow(256, 4 - i)));
+                ip = (ip - num * quint32(qPow(256, 4 - i)));
+                octets[i - 1] = quint8(num);
+            }
+
+            for (int i = 1; i <= 4; i++)
+            {
+                parts[i - 1] = (octets[i - 1] * quint32(qPow(256, 4 - i)));
+            }
+
+            parts[4 - 1] = 255;
+
+            quint32 new_ip = (parts[0] + parts[1] + parts[2] + parts[3]);
+
+            QHostAddress address(ip);
+
+            QHostAddress address_broadcast(new_ip);
+
+            m_address_list.append(address_broadcast);
+        }
+    }
+}
+
 void DiscoverClient::write()
 {
-    foreach (const QHostAddress &address, m_address_list)
+    for (const QHostAddress &address : m_address_list)
         m_socket->writeDatagram(m_negotiation_string, address, m_port);
 }
 
@@ -61,7 +90,7 @@ void DiscoverClient::readyRead()
 
         QList<quint32> ip_list;
 
-        foreach (const QHostAddress &host, QNetworkInterface::allAddresses())
+        for (const QHostAddress &host : QNetworkInterface::allAddresses())
             ip_list.append(host.toIPv4Address());
 
         ip_list.removeAll(QHostAddress(QHostAddress::LocalHost).toIPv4Address());

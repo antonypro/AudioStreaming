@@ -33,10 +33,10 @@ private slots:
     void removeSocket(QTcpSocket *socket);
 
 private:
-    TcpServer *m_server;
+    QPointer<TcpServer> m_server;
 
-    QTcpSocket *m_pending_socket;
-    OpenSslLib *m_openssl;
+    QPointer<QTcpSocket> m_pending_socket;
+    QPointer<OpenSslLib> m_openssl;
 
     QList<QTcpSocket*> m_socket_list;
     QHash<qintptr, QTcpSocket*> m_socket_hash;

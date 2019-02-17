@@ -10,6 +10,7 @@ class LevelMeter : public QObject
     Q_OBJECT
 public:
     explicit LevelMeter(QObject *parent = nullptr);
+    ~LevelMeter();
 
 signals:
     void currentlevel(float);
@@ -28,7 +29,7 @@ private:
     QAudioFormat m_format;
     float m_level;
     QByteArray m_buffer;
-    QTimer *m_timer;
+    QPointer<QTimer> m_timer;
 };
 
 #endif // LEVELMETER_H

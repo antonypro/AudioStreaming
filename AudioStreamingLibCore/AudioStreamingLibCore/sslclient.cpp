@@ -3,7 +3,6 @@
 SslClient::SslClient(QObject *parent) : QObject(parent)
 {
     m_size = 0;
-    m_socket = nullptr;
 
     m_timer = new QTimer(this);
     connect(m_timer, &QTimer::timeout, this, &SslClient::timeout);
@@ -21,7 +20,6 @@ void SslClient::connectToHost(const QString &host, quint16 port)
         return;
 
     m_socket = new QSslSocket(this);
-    SETTONULLPTR(m_socket);
 
     connect(m_socket, &QSslSocket::encrypted, this, &SslClient::encrypted);
     connect(m_socket, &QSslSocket::disconnected, this, &SslClient::disconnectedPrivate);
@@ -217,6 +215,12 @@ void SslClient::processInput(const QByteArray &peer_data)
     case ServerCommand::Warning:
     {
         emit webClientWarning(QLatin1String(data));
+
+        break;
+    }
+    case ServerCommand::XML:
+    {
+        emit commandXML(data);
 
         break;
     }

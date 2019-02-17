@@ -24,7 +24,7 @@ private:
     QElapsedTimer m_time;
     qint64 m_elapsed_time;
 
-    QTimer *m_timer;
+    QPointer<QTimer> m_timer;
 
     int m_sample_rate;
     int m_channels;
