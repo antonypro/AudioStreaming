@@ -4,12 +4,11 @@ Cross platform audio streaming library for local networks and VOIP for both loca
 
 ### Features:
 
-* Fully multi threaded.
+* Fully multi threaded, with asynchronous APIs.
 * Audio can be compressed using Opus codec.
-* Audio can be buffered to reduce the occurrence of buffer underrun in the client side.
+* Audio can be buffered to reduce the occurrence of buffer under run in the client side.
 * Can work on Broadcast or Walkie Talkie modes.
-* Tested up with Qt 5.5.1 and later.
-* Low latency modes are supported.
+* Walkie Talkie mode can also be used with WebServer for internet.
 * Smart buffer available.
 
 ### Needed:
@@ -32,14 +31,10 @@ To compile the library you need to choose if you want to compress audio using Op
 
 If you want to use Opus edit AudioStreamingLibSettings.pri setting `OPUS_ENABLED = TRUE`, with the appropriated version of Opus compiled, set the include folder of r8brain and Opus, and the Opus libraries location in AudioStreamingLibSettings.pri. If you don't want to use Opus leave `OPUS_ENABLED` blank or with any other value than `TRUE`.
 
-The same applies to OpenSsl, if you want to static link OpenSsl set `OPENSSL_ENABLED = TRUE`.(Please not that even if OpenSsl won't be statically linked it may be available through dynamic linking at runtime.)
+The same applies to OpenSsl, if you want to static link OpenSsl set `OPENSSL_ENABLED = TRUE`.(Please not that even if OpenSsl won't be statically linked it may be available through dynamic linking at run time.)
 With the appropriated version of OpenSsl compiled, set the include folder and the libraries location of OpenSsl in AudioStreamingLibSettings.pri.
 
 With the appropriate settings set (using Opus or not, static linking OpenSsl or not) build the buildlib.pro, if it's already built and you are changing settings remember to re-run qmake and rebuild.
-
-#### Qbs:
-
-Due to deprecation of Qbs, this build system have been removed from this library.
 
 ### Using the library:
 
@@ -59,7 +54,7 @@ For more information of how to use the APIs, please see the [Wiki](https://githu
 
 This repository also includes a small server for who wants a server managing the connections, on local networks or the internet!
 
-It's just a Server that manages users with ID and password on a SQLite database thus do not require a SQL server. When one user connects to other, all traffic is routed through server, the original P2P approach doesn't work in a real scenario and was abandoned.
+It's just a Server that manages users with ID and password on a SQLite database thus do not require a SQL server. When one user connects to other, all traffic is routed through server.
 
 ### Smart buffer:
 
