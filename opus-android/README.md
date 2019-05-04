@@ -1,3 +1,3 @@
-﻿## Build Opus for android
+﻿## Build Opus for Android
 
-Place Opus inside folder opus-android/jni/opus and keep the provided makefiles, then run `ndk-build` inside the jni folder.
+See the [Wiki](https://github.com/antonypro/AudioStreaming/wiki/Compile-Opus-for-Android) for more info.
