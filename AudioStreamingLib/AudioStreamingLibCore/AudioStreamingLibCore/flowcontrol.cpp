@@ -16,24 +16,14 @@ FlowControl::FlowControl(QObject *parent) : QObject(parent)
 
     m_timer = new QTimer(this);
     m_timer->setTimerType(Qt::PreciseTimer);
-    connect(m_timer, &QTimer::timeout, this, &FlowControl::askforbytes);
+    connect(m_timer, &QTimer::timeout, this, &FlowControl::askForBytes);
     m_timer->setInterval(interval);
 }
 
 void FlowControl::start(int sample_rate, int channels, int bits_per_sample)
 {
-    switch (sample_rate)
+    if (sample_rate < 8000 || sample_rate > 192000)
     {
-    case 8000:
-    case 12000:
-    case 16000:
-    case 24000:
-    case 44100:
-    case 48000:
-    case 96000:
-    case 192000:
-        break;
-    default:
         emit error(errorstr);
         return;
     }
@@ -60,22 +50,39 @@ void FlowControl::start(int sample_rate, int channels, int bits_per_sample)
         return;
     }
 
-    m_sample_rate = sample_rate;
+    m_sample_rate = 8000; //Generate at 8KHz and up-sample
     m_channels = channels;
     m_bits_per_sample = bits_per_sample;
+
+    m_resampler = new r8brain(this);
+
+    connect(m_resampler, &r8brain::error, this, &FlowControl::error);
+    connect(m_resampler, &r8brain::resampled, this, &FlowControl::readyRead);
+
+    m_resampler->start(m_sample_rate, sample_rate, channels, channels, bits_per_sample);
 
     m_timer->start();
     m_time.start();
 }
 
-void FlowControl::askforbytes() //Compute the size in bytes of the elapsed time
+void FlowControl::askForBytes() //Compute the size in bytes of the elapsed time
 {
-    qint64 elapsed_time = m_time.nsecsElapsed();
+    qint64 elapsed_time = m_time.elapsed();
 
     qint64 elapsed = elapsed_time - m_elapsed_time;
     m_elapsed_time = elapsed_time;
 
-    int bytes = int(nanoTimeToSize(elapsed, m_channels, int(sizeof(float)) * 8, m_sample_rate));
+    int bytes = int(timeToSize(elapsed, m_channels, m_bits_per_sample, m_sample_rate));
 
-    emit getbytes(bytes);
+    QByteArray data;
+    data.resize(bytes);
+
+    if (!data.isEmpty())
+    {
+        Eigen::Ref<Eigen::VectorXf> samples = Eigen::Map<Eigen::VectorXf>(reinterpret_cast<float*>(data.data()), data.size() / int(sizeof(float)));
+        samples.fill(0);
+    }
+
+    if (m_resampler)
+        m_resampler->write(data);
 }

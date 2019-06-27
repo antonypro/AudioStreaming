@@ -13,7 +13,7 @@
 #include <openssl/x509.h>
 
 #define pEVP_PKEY_assign_RSA(pkey,rsa) \
-pEVP_PKEY_assign((pkey),EVP_PKEY_RSA,(char *)(rsa))
+pEVP_PKEY_assign((pkey),EVP_PKEY_RSA,reinterpret_cast<char*>(rsa))
 
 class Certificate : public QObject
 {
@@ -128,6 +128,12 @@ private:
 
     typedef long(*tBIO_ctrl)(BIO *bp, int cmd, long larg, void *parg);
     tBIO_ctrl pBIO_ctrl;
+
+    typedef ASN1_TIME *(*tX509_getm_notBefore)(const X509 *x);
+    tX509_getm_notBefore pX509_getm_notBefore;
+
+    typedef ASN1_TIME *(*tX509_getm_notAfter)(const X509 *x);
+    tX509_getm_notAfter pX509_getm_notAfter;
 };
 
 #endif // CERTIFICATE_H

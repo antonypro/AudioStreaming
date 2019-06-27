@@ -45,19 +45,14 @@ private slots:
     void updateConnections();
     void boxListenInputClicked(bool checked);
     void volumeChanged(int volume);
+    void warning(const QString &warning);
     void error(const QString &error);
     void finished();
+    void deviceTypeChanged();
     void currentIndexChanged(int index);
     void getDevInfo();
 
 private:
-    enum AudioInputInfo
-    {
-        Loopback,
-        FFMPEG,
-        Other
-    };
-
     QPointer<AudioStreamingLibCore> m_audio_lib;
 
     QPointer<SpectrumAnalyzer> m_spectrum_analyzer;
@@ -67,6 +62,14 @@ private:
 #endif
 
     QByteArray m_buffer;
+
+    QGroupBox *groupboxtype;
+
+    QRadioButton *buttonloopbackaudioinput;
+
+    QRadioButton *buttonffmpegaudioinput;
+
+    QRadioButton *buttonaudioinput;
 
     QComboBox *comboboxaudioinput;
 
@@ -104,6 +107,8 @@ private:
     QCheckBox *boxautostart;
 
     QPlainTextEdit *texteditlog;
+    QCheckBox *boxlogtowidget;
+    QPushButton *buttonclearlog;
 
     QPointer<AudioRecorder> m_audio_recorder;
     QPointer<MP3Recorder> m_audio_recorder_mp3;

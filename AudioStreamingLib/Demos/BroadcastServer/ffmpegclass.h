@@ -46,6 +46,7 @@ private slots:
 private:
     QPushButton *play_pause;
     QPushButton *stop;
+    QPushButton *repeat;
     QLabel *info;
     QPushButton *add;
     QPushButton *remove;

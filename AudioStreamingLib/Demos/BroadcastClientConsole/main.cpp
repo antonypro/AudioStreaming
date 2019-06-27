@@ -51,32 +51,28 @@ int main(int argc, char *argv[])
 
     AudioStreamingLibCore audio_lib;
 
-    StreamingInfo info;
+    AudioStreamingLibInfo info;
 
-    info.setWorkMode(StreamingInfo::StreamingWorkMode::BroadcastClient);
+    info.setWorkMode(AudioStreamingLibInfo::StreamingWorkMode::BroadcastClient);
     info.setTimeToBuffer(parser.value(time_to_buffer).toInt());
     info.setEncryptionEnabled(!parser.value(password).isEmpty());
-    info.setNegotiationString(QByteArray("BroadcastTCPDemo"));
+    info.setNegotiationString("BroadcastTCPDemo");
 
     QObject::connect(&audio_lib, &AudioStreamingLibCore::error, &a, [&](const QString &error){
-        qDebug() << "Error:" << qPrintable(error);
-        qDebug() << ""; //New line
+        qDebug() << "Error:" << qPrintable(error) << "\n";
         QCoreApplication::exit(1);
     });
 
     QObject::connect(&audio_lib, &AudioStreamingLibCore::connected, &a, [&](const QHostAddress &host_address){
-        qDebug() << "Connected to:" << qPrintable(host_address.toString());
-        qDebug() << ""; //New line
+        qDebug() << "Connected to:" << qPrintable(host_address.toString()) << "\n";
     });
 
     QObject::connect(&audio_lib, &AudioStreamingLibCore::disconnected, &a, [&](const QHostAddress &host_address){
-        qDebug() << "Disconnected from:" << qPrintable(host_address.toString());
-        qDebug() << ""; //New line
+        qDebug() << "Disconnected from:" << qPrintable(host_address.toString()) << "\n";
     });
 
     QObject::connect(&audio_lib, &AudioStreamingLibCore::finished, &a, [&]{
-        qDebug() << "AudioStreamingLib finished, exiting...";
-        qDebug() << ""; //New line
+        qDebug() << "AudioStreamingLib finished, exiting..." << "\n";
         QCoreApplication::exit(0);
     });
 
@@ -85,8 +81,7 @@ int main(int argc, char *argv[])
     audio_lib.setVolume(100);
 
     qDebug() << "Connecting to:" << qPrintable(parser.value(address))
-             << "on port:" << parser.value(port).toInt() << "...";
-    qDebug() << ""; //New line
+             << "on port:" << parser.value(port).toInt() << "..." << "\n";
 
     audio_lib.connectToHost(parser.value(address),
                             quint16(parser.value(port).toInt()),

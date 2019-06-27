@@ -21,11 +21,14 @@ void OpenSslLib::loadFunctions()
         return;
 
 #ifndef OPENSSL
-#if defined(Q_OS_WIN) || defined(Q_OS_WINPHONE)
-    QLibrary openssl("libeay32");
+#if defined Q_OS_WIN64
+    const char *crypto = "libcrypto-1_1-x64";
+#elif defined Q_OS_WIN32
+    const char *crypto = "libcrypto-1_1";
 #else
-    QLibrary openssl("crypto");
+    const char *crypto = "crypto";
 #endif
+    QLibrary openssl(crypto);
 #endif
 
 #ifndef OPENSSL
@@ -74,7 +77,7 @@ void OpenSslLib::loadFunctions()
     if (!(pEVP_sha256 = reinterpret_cast<tEVP_sha256>(openssl.resolve("EVP_sha256"))))
         return;
 
-    if (!(pEVP_CIPHER_CTX_init = reinterpret_cast<tEVP_CIPHER_CTX_init>(openssl.resolve("EVP_CIPHER_CTX_init"))))
+    if (!(pEVP_CIPHER_CTX_new = reinterpret_cast<tEVP_CIPHER_CTX_new>(openssl.resolve("EVP_CIPHER_CTX_new"))))
         return;
 
     if (!(pEVP_EncryptInit_ex = reinterpret_cast<tEVP_EncryptInit_ex>(openssl.resolve("EVP_EncryptInit_ex"))))
@@ -86,7 +89,7 @@ void OpenSslLib::loadFunctions()
     if (!(pEVP_EncryptFinal_ex = reinterpret_cast<tEVP_EncryptFinal_ex>(openssl.resolve("EVP_EncryptFinal_ex"))))
         return;
 
-    if (!(pEVP_CIPHER_CTX_cleanup = reinterpret_cast<tEVP_CIPHER_CTX_cleanup>(openssl.resolve("EVP_CIPHER_CTX_cleanup"))))
+    if (!(pEVP_CIPHER_CTX_free = reinterpret_cast<tEVP_CIPHER_CTX_free>(openssl.resolve("EVP_CIPHER_CTX_free"))))
         return;
 
     if (!(pEVP_DecryptInit_ex = reinterpret_cast<tEVP_DecryptInit_ex>(openssl.resolve("EVP_DecryptInit_ex"))))
@@ -126,7 +129,7 @@ void OpenSslLib::loadFunctions()
 
     pEVP_sha256 = reinterpret_cast<tEVP_sha256>(&EVP_sha256);
 
-    pEVP_CIPHER_CTX_init = reinterpret_cast<tEVP_CIPHER_CTX_init>(&EVP_CIPHER_CTX_init);
+    pEVP_CIPHER_CTX_new = reinterpret_cast<tEVP_CIPHER_CTX_new>(&EVP_CIPHER_CTX_new);
 
     pEVP_EncryptInit_ex = reinterpret_cast<tEVP_EncryptInit_ex>(&EVP_EncryptInit_ex);
 
@@ -134,7 +137,7 @@ void OpenSslLib::loadFunctions()
 
     pEVP_EncryptFinal_ex = reinterpret_cast<tEVP_EncryptFinal_ex>(&EVP_EncryptFinal_ex);
 
-    pEVP_CIPHER_CTX_cleanup = reinterpret_cast<tEVP_CIPHER_CTX_cleanup>(&EVP_CIPHER_CTX_cleanup);
+    pEVP_CIPHER_CTX_free = reinterpret_cast<tEVP_CIPHER_CTX_free>(&EVP_CIPHER_CTX_free);
 
     pEVP_DecryptInit_ex = reinterpret_cast<tEVP_DecryptInit_ex>(&EVP_DecryptInit_ex);
 
@@ -188,8 +191,6 @@ void OpenSslLib::startEncrypt(const QByteArray &salt)
     if (enc_ctx)
         return;
 
-    enc_ctx = new EVP_CIPHER_CTX;
-
     unsigned char *key_data;
     int key_data_len;
 
@@ -204,7 +205,7 @@ void OpenSslLib::startEncrypt(const QByteArray &salt)
     if (i != 32)
         return;
 
-    pEVP_CIPHER_CTX_init(enc_ctx);
+    enc_ctx = pEVP_CIPHER_CTX_new();
     pEVP_EncryptInit_ex(enc_ctx, pEVP_aes_256_cbc(), nullptr, key, iv);
 }
 
@@ -239,8 +240,7 @@ void OpenSslLib::stopEncrypt()
     if (!enc_ctx)
         return;
 
-    pEVP_CIPHER_CTX_cleanup(enc_ctx);
-    delete enc_ctx;
+    pEVP_CIPHER_CTX_free(enc_ctx);
     enc_ctx = nullptr;
 }
 
@@ -248,8 +248,6 @@ void OpenSslLib::startDecrypt(const QByteArray &salt)
 {
     if (dec_ctx)
         return;
-
-    dec_ctx = new EVP_CIPHER_CTX;
 
     unsigned char *key_data;
     int key_data_len;
@@ -265,7 +263,7 @@ void OpenSslLib::startDecrypt(const QByteArray &salt)
     if (i != 32)
         return;
 
-    pEVP_CIPHER_CTX_init(dec_ctx);
+    dec_ctx = pEVP_CIPHER_CTX_new();
     pEVP_DecryptInit_ex(dec_ctx, pEVP_aes_256_cbc(), nullptr, key, iv);
 }
 
@@ -297,8 +295,7 @@ void OpenSslLib::stopDecrypt()
     if (!dec_ctx)
         return;
 
-    pEVP_CIPHER_CTX_cleanup(dec_ctx);
-    delete dec_ctx;
+    pEVP_CIPHER_CTX_free(dec_ctx);
     dec_ctx = nullptr;
 }
 

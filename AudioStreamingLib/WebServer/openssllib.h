@@ -111,8 +111,8 @@ private:
     typedef const EVP_MD*(*tEVP_sha256)(void);
     tEVP_sha256 pEVP_sha256;
 
-    typedef void(*tEVP_CIPHER_CTX_init)(EVP_CIPHER_CTX *a);
-    tEVP_CIPHER_CTX_init pEVP_CIPHER_CTX_init;
+    typedef EVP_CIPHER_CTX *(*tEVP_CIPHER_CTX_new)(void);
+    tEVP_CIPHER_CTX_new pEVP_CIPHER_CTX_new;
 
     typedef int(*tEVP_EncryptInit_ex)(EVP_CIPHER_CTX *ctx, const EVP_CIPHER *cipher,
                                       ENGINE *impl, const unsigned char *key,
@@ -126,8 +126,8 @@ private:
     typedef int(*tEVP_EncryptFinal_ex)(EVP_CIPHER_CTX *ctx, unsigned char *out, int *outl);
     tEVP_EncryptFinal_ex pEVP_EncryptFinal_ex;
 
-    typedef int(*tEVP_CIPHER_CTX_cleanup)(EVP_CIPHER_CTX *a);
-    tEVP_CIPHER_CTX_cleanup pEVP_CIPHER_CTX_cleanup;
+    typedef int(*tEVP_CIPHER_CTX_free)(EVP_CIPHER_CTX *ctx);
+    tEVP_CIPHER_CTX_free pEVP_CIPHER_CTX_free;
 
     typedef int(*tEVP_DecryptInit_ex)(EVP_CIPHER_CTX *ctx, const EVP_CIPHER *cipher,
                                       ENGINE *impl, const unsigned char *key,

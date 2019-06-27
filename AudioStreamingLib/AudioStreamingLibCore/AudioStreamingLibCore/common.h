@@ -9,6 +9,7 @@
 #include <QtMultimedia>
 #include "audiostreaminglibcore.h"
 #include "audiocommon.h"
+#include "r8brain.h"
 
 #if Q_BYTE_ORDER != Q_LITTLE_ENDIAN
 #error "Only little endian machines are supported"
@@ -37,32 +38,31 @@ extern qint64 record_count;
     << "\nFile:" << __FILE__\
     << "\nLine:" << __LINE__\
     << "\nFunction:" << __FUNCTION__\
-    << "\nIndex:" << ++record_count;\
+    << "\nIndex:" << ++record_count\
     \
-    qDebug()\
-    << "Message:"\
+    << "\nMessage:"\
     << message\
     << "\n";\
     \
     record_mutex.unlock();\
 }
 
-#ifdef IS_TO_DEBUG_VERBOSE_1
+#endif
+
+#if defined(IS_TO_DEBUG_VERBOSE_1)
 
 #define LIB_DEBUG_LEVEL_1(message)\
     DEBUG_FUNCTION(message)
 #define LIB_DEBUG_LEVEL_2(message) //Does nothing
 
-#elif defined(IS_TO_DEBUG_VERBOSE_2) // IS_TO_DEBUG_VERBOSE_1
+#elif defined(IS_TO_DEBUG_VERBOSE_2)
 
 #define LIB_DEBUG_LEVEL_1(message)\
     DEBUG_FUNCTION(message)
 #define LIB_DEBUG_LEVEL_2(message)\
     DEBUG_FUNCTION(message)
 
-#endif // IS_TO_DEBUG_VERBOSE_1
-
-#else //IS_TO_DEBUG
+#else
 
 #define LIB_DEBUG_LEVEL_1(message) //Does nothing
 #define LIB_DEBUG_LEVEL_2(message) //Does nothing
@@ -70,8 +70,6 @@ extern qint64 record_count;
 #endif //IS_TO_DEBUG
 
 #ifdef OPUS
-
-#define BUFFER_LEN 1024*1024 //Used by resampler
 
 #define MAX_PACKET_SIZE 3*1276
 
@@ -85,27 +83,32 @@ extern QSemaphore m_worker_semaphore;
 
 #define START_THREAD \
 {\
+    QMutexLocker locker(&m_worker_mutex);\
+    Q_UNUSED(locker)\
+    \
     setParent(nullptr);\
+    \
     QThread *new_thread = new QThread();\
     moveToThread(new_thread);\
     \
-    m_worker_mutex.lock();\
-    m_worker_count++;\
-    m_worker_mutex.unlock();\
     connect(parent, &QObject::destroyed, this, &QObject::deleteLater);\
+    \
+    m_worker_count++;\
     \
     new_thread->start();\
 }
 
 #define STOP_THREAD \
 {\
-    m_worker_mutex.lock();\
+    QMutexLocker locker(&m_worker_mutex);\
+    Q_UNUSED(locker)\
+    \
+    thread()->quit();\
+    \
     bool empty = (--m_worker_count == 0);\
-    m_worker_mutex.unlock();\
-    if (empty) \
-    {\
+    \
+    if (empty)\
         m_worker_semaphore.release();\
-    }\
 }
 
 /*** THREAD END ***/

@@ -7,7 +7,8 @@ WaveFormWidget::WaveFormWidget(QWidget *parent) : QWidget(parent)
     int threads = QThreadPool::globalInstance()->maxThreadCount() + 1;
     QThreadPool::globalInstance()->setMaxThreadCount(threads);
 
-    qRegisterMetaType<QVector<QPoint> >("QVector<QPoint>");
+    qRegisterMetaType<QVector<QPoint>>("QVector<QPoint>");
+
     clear();
 }
 
@@ -101,8 +102,7 @@ void WaveFormWidget::calculateWaveFormThread(const QByteArray &data, int window_
             QPoint point = QPoint(qRound(i * (float(window_width - 1) / numSamples)),
                                   int(window_height - level * qRound(window_height * 0.75)));
 
-            if (point_list.isEmpty() || point.x() > point_list.last().x() + 2)
-                point_list.append(point);
+            point_list.append(point);
         }
 
         iter = numSamples - i;
@@ -121,8 +121,7 @@ void WaveFormWidget::calculateWaveFormThread(const QByteArray &data, int window_
             QPoint point = QPoint(qRound(i * (float(window_width - 1) / numSamples)),
                                   int(window_height - level * qRound(window_height * 0.75)));
 
-            if (point_list.isEmpty() || point.x() > point_list.last().x() + 2)
-                point_list.append(point);
+            point_list.append(point);
         }
 
         if (point_list.size() >= 2)

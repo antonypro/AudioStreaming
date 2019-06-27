@@ -48,37 +48,20 @@ HEADERS +=  $$PWD/audiostreaminglibcore.h \
             $$PWD/flowcontrol.h \
             $$PWD/levelmeter.h
 
+#Include r8brain
+INCLUDEPATH +=  $$PWD/3rdparty/r8brain
+SOURCES     +=  $$PWD/3rdparty/r8brain/r8bbase.cpp
+SOURCES     +=  $$PWD/r8brain.cpp
+HEADERS     +=  $$PWD/r8brain.h
+
 WITH_OPUS {
 DEFINES +=  NOMINMAX
 
 SOURCES +=  $$PWD/opusencoderclass.cpp \
-            $$PWD/opusdecoderclass.cpp \
-            $$PWD/r8brain.cpp
+            $$PWD/opusdecoderclass.cpp
 
 HEADERS +=  $$PWD/opusencoderclass.h \
-            $$PWD/opusdecoderclass.h \
-            $$PWD/r8brain.h
-
-KNOWNDEVICE:win32{
-INCLUDEPATH += $$WIN_R8BRAIN_RESAMPLER_INCLUDE
-SOURCES += $$WIN_R8BRAIN_RESAMPLER_INCLUDE/r8bbase.cpp
-}
-KNOWNDEVICE:android{
-INCLUDEPATH += $$ANDROID_R8BRAIN_RESAMPLER_INCLUDE
-SOURCES += $$ANDROID_R8BRAIN_RESAMPLER_INCLUDE/r8bbase.cpp
-}
-KNOWNDEVICE:unix:!macx:!android{
-INCLUDEPATH += $$LINUX_R8BRAIN_RESAMPLER_INCLUDE
-SOURCES += $$LINUX_R8BRAIN_RESAMPLER_INCLUDE/r8bbase.cpp
-}
-KNOWNDEVICE:macx{
-INCLUDEPATH += $$MACOS_R8BRAIN_RESAMPLER_INCLUDE
-SOURCES += $$MACOS_R8BRAIN_RESAMPLER_INCLUDE/r8bbase.cpp
-}
-!KNOWNDEVICE{
-INCLUDEPATH += $$UNKNOWN_R8BRAIN_RESAMPLER_INCLUDE
-SOURCES += $$UNKNOWN_R8BRAIN_RESAMPLER_INCLUDE/r8bbase.cpp
-}
+            $$PWD/opusdecoderclass.h
 }
 
 #Set output directory

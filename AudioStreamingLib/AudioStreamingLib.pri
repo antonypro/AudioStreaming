@@ -20,8 +20,10 @@ message("AudioStreamingLib is using settings for Windows MinGW 32 bits")
 
 CONFIG += KNOWNDEVICE
 
+DEFINES += EIGEN_MPL2_ONLY
+DEFINES += EIGEN_DONT_VECTORIZE #Clear vector flags
+
 !contains(USE_CUSTOM_ACCELERATION, TRUE){
-DEFINES += EIGEN_DONT_VECTORIZE
 DEFINES += EIGEN_VECTORIZE_SSE3
 } else {
 DEFINES += $$CUSTOM_ACCELERATION
@@ -45,8 +47,10 @@ message("AudioStreamingLib is using settings for Windows MinGW 64 bits")
 
 CONFIG += KNOWNDEVICE
 
+DEFINES += EIGEN_MPL2_ONLY
+DEFINES += EIGEN_DONT_VECTORIZE #Clear vector flags
+
 !contains(USE_CUSTOM_ACCELERATION, TRUE){
-DEFINES += EIGEN_DONT_VECTORIZE
 DEFINES += EIGEN_VECTORIZE_SSE3
 } else {
 DEFINES += $$CUSTOM_ACCELERATION
@@ -71,8 +75,10 @@ message("AudioStreamingLib is using settings for Windows Visual Studio 32 bits")
 
 CONFIG += KNOWNDEVICE
 
+DEFINES += EIGEN_MPL2_ONLY
+DEFINES += EIGEN_DONT_VECTORIZE #Clear vector flags
+
 !contains(USE_CUSTOM_ACCELERATION, TRUE){
-DEFINES += EIGEN_DONT_VECTORIZE
 DEFINES += EIGEN_VECTORIZE_SSE3
 } else {
 DEFINES += $$CUSTOM_ACCELERATION
@@ -121,8 +127,10 @@ message("AudioStreamingLib is using settings for Windows Visual Studio 64 bits")
 
 CONFIG += KNOWNDEVICE
 
+DEFINES += EIGEN_MPL2_ONLY
+DEFINES += EIGEN_DONT_VECTORIZE #Clear vector flags
+
 !contains(USE_CUSTOM_ACCELERATION, TRUE){
-DEFINES += EIGEN_DONT_VECTORIZE
 DEFINES += EIGEN_VECTORIZE_SSE3
 } else {
 DEFINES += $$CUSTOM_ACCELERATION
@@ -171,8 +179,10 @@ message("AudioStreamingLib is using settings for Linux 32 bits")
 
 CONFIG += KNOWNDEVICE
 
+DEFINES += EIGEN_MPL2_ONLY
+DEFINES += EIGEN_DONT_VECTORIZE #Clear vector flags
+
 !contains(USE_CUSTOM_ACCELERATION, TRUE){
-DEFINES += EIGEN_DONT_VECTORIZE
 DEFINES += EIGEN_VECTORIZE_SSE3
 } else {
 DEFINES += $$CUSTOM_ACCELERATION
@@ -196,8 +206,10 @@ message("AudioStreamingLib is using settings for Linux 64 bits")
 
 CONFIG += KNOWNDEVICE
 
+DEFINES += EIGEN_MPL2_ONLY
+DEFINES += EIGEN_DONT_VECTORIZE #Clear vector flags
+
 !contains(USE_CUSTOM_ACCELERATION, TRUE){
-DEFINES += EIGEN_DONT_VECTORIZE
 DEFINES += EIGEN_VECTORIZE_SSE3
 } else {
 DEFINES += $$CUSTOM_ACCELERATION
@@ -221,8 +233,10 @@ message("AudioStreamingLib is using settings for macOS 64 bits")
 
 CONFIG += KNOWNDEVICE
 
+DEFINES += EIGEN_MPL2_ONLY
+DEFINES += EIGEN_DONT_VECTORIZE #Clear vector flags
+
 !contains(USE_CUSTOM_ACCELERATION, TRUE){
-DEFINES += EIGEN_DONT_VECTORIZE
 DEFINES += EIGEN_VECTORIZE_SSE3
 } else {
 DEFINES += $$CUSTOM_ACCELERATION
@@ -245,6 +259,8 @@ contains(ANDROID_TARGET_ARCH, armeabi-v7a):android { #ANDROID ARMV7A
 message("AudioStreamingLib is using settings for Android ARMV7A")
 
 CONFIG += KNOWNDEVICE
+
+DEFINES += EIGEN_MPL2_ONLY
 
 !contains(USE_CUSTOM_ACCELERATION, TRUE){
 QMAKE_CXXFLAGS += -mfpu=neon
@@ -273,8 +289,10 @@ message("AudioStreamingLib is using settings for Android x86")
 
 CONFIG += KNOWNDEVICE
 
+DEFINES += EIGEN_MPL2_ONLY
+DEFINES += EIGEN_DONT_VECTORIZE #Clear vector flags
+
 !contains(USE_CUSTOM_ACCELERATION, TRUE){
-DEFINES += EIGEN_DONT_VECTORIZE
 DEFINES += EIGEN_VECTORIZE_SSE3
 } else {
 DEFINES += $$CUSTOM_ACCELERATION
@@ -296,6 +314,9 @@ LIBS += $$ANDROID_X86_OPENSSL_CRYPTO_LIB
 
 !KNOWNDEVICE { #Unknown device
 message("AudioStreamingLib is using settings for Unknown Device")
+
+DEFINES += EIGEN_MPL2_ONLY
+DEFINES += EIGEN_DONT_VECTORIZE #Clear vector flags
 
 contains(UNKNOWN_CUSTOM_ACCELERATION_DEFINE, TRUE){
 DEFINES += $$UNKNOWN_CUSTOM_ACCELERATION

@@ -31,8 +31,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     m_discover_instance = new AudioStreamingLibCore(this);
 
     initWidgets();
-
-    qInstallMessageHandler(messageHandler);
 }
 
 MainWindow::~MainWindow()
@@ -250,7 +248,7 @@ void MainWindow::initWidgets()
 
     labelvolume = new QLabel(this);
     slidervolume = new QSlider(Qt::Horizontal, this);
-    slidervolume->setRange(0, 100);
+    slidervolume->setRange(0, 150);
 
     boxinputmuted = new QCheckBox(this);
     boxinputmuted->setText("Mute input");
@@ -259,9 +257,18 @@ void MainWindow::initWidgets()
 
     scrollclientserver = new QScrollArea(this);
 
-#if !defined(Q_OS_ANDROID) && !defined(Q_OS_IOS) && !defined(Q_OS_WINPHONE)
+#ifndef Q_OS_ANDROID
     scrollclientserver->setWidgetResizable(true);
     scrollclientserver->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+#endif
+
+#ifdef Q_OS_ANDROID
+    scrollclientserver->setWidgetResizable(true);
+
+    scrollclientserver->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scrollclientserver->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+
+    QScroller::grabGesture(scrollclientserver, QScroller::LeftMouseButtonGesture);
 #endif
 
     QWidget *widgetserverclient = new QWidget(this);
@@ -355,9 +362,32 @@ void MainWindow::initWidgets()
     layout_record->addWidget(lcdtime, 1, 0, 1, 5);
     layout_record->addWidget(boxautostart, 2, 0, 1, 5);
 
+    QWidget *log = new QWidget(this);
+
     texteditlog = new QPlainTextEdit(this);
     texteditlog->setMaximumBlockCount(10000);
+
+    boxlogtowidget = new QCheckBox("Log to widget", this);
+    buttonclearlog = new QPushButton("Clear", this);
+
     debug_edit = texteditlog;
+
+    QHBoxLayout *layout_log_widgets = new QHBoxLayout();
+    layout_log_widgets->addWidget(boxlogtowidget);
+    layout_log_widgets->addWidget(buttonclearlog);
+    layout_log_widgets->addStretch();
+
+    QVBoxLayout *layout_log = new QVBoxLayout(log);
+    layout_log->setMargin(0);
+    layout_log->addWidget(texteditlog);
+    layout_log->addLayout(layout_log_widgets);
+
+#ifdef Q_OS_ANDROID
+    texteditlog->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    texteditlog->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+
+    QScroller::grabGesture(texteditlog, QScroller::LeftMouseButtonGesture);
+#endif
 
     tabwidget->addTab(scrollclientserver, "Client Server");
     tabwidget->addTab(listwidgetpeers, "Search");
@@ -365,7 +395,7 @@ void MainWindow::initWidgets()
     tabwidget->addTab(widgetchat, "Chat");
     tabwidget->addTab(recorder, "Record");
     tabwidget->addTab(texteditsettings, "Settings");
-    tabwidget->addTab(texteditlog, "Log");
+    tabwidget->addTab(log, "Log");
 
     connect(websettings, &Settings::commandXML, this, [=](const QByteArray &xml_data){
         if (m_audio_lib)
@@ -391,6 +421,12 @@ void MainWindow::initWidgets()
     connect(buttonstartserver, &QPushButton::clicked, this, &MainWindow::server);
 
     connect(buttonconnecttopeer, &QPushButton::clicked, this, &MainWindow::connectToPeer);
+
+    connect(boxlogtowidget, &QCheckBox::clicked, [=](bool checked){
+        qInstallMessageHandler(checked ? messageHandler : nullptr);
+    });
+
+    connect(buttonclearlog, &QCheckBox::clicked, texteditlog, &QPlainTextEdit::clear);
 
     linechat->blockSignals(true);
 
@@ -469,7 +505,7 @@ void MainWindow::startDiscover()
     connect(instance, &DiscoverClient::peerFound, this, &MainWindow::peerFound);
     connect(this, &MainWindow::stoprequest, instance, &DiscoverClient::deleteLater);
 
-    instance->discover(quint16(lineport->text().toInt()), QByteArray("WalkieTalkieTCPDemo"));
+    instance->discover(quint16(lineport->text().toInt()), "WalkieTalkieTCPDemo");
 }
 
 void MainWindow::stopDiscover()
@@ -517,6 +553,9 @@ void MainWindow::webClient(const QString &username, const QString &password, boo
         return;
     }
 
+    if (comboboxaudioinput->count() == 0 || comboboxaudiooutput->count() == 0)
+        return;
+
     m_audio_lib = new AudioStreamingLibCore(this);
 
     QAudioDeviceInfo inputdevinfo = comboboxaudioinput->currentData().value<QAudioDeviceInfo>();
@@ -529,22 +568,23 @@ void MainWindow::webClient(const QString &username, const QString &password, boo
     format.setSampleType(QAudioFormat::Float);
     format.setByteOrder(QAudioFormat::LittleEndian);
 
-    StreamingInfo info;
+    AudioStreamingLibInfo info;
 
     info.setInputAudioFormat(format);
     info.setInputDeviceInfo(inputdevinfo);
     info.setOutputDeviceInfo(outputdevinfo);
-    info.setWorkMode(StreamingInfo::StreamingWorkMode::WebClient);
+    info.setWorkMode(AudioStreamingLibInfo::StreamingWorkMode::WebClient);
     info.setTimeToBuffer(linebuffertimeweb->text().toInt());
     info.setEncryptionEnabled(!password.isEmpty());
     info.setGetAudioEnabled(true);
-    info.setNegotiationString(QByteArray("WalkieTalkieTCPDemo"));
+    info.setNegotiationString(linewebcode->text().toLatin1());
     info.setID(username.trimmed());
 
     buttonrecord->setEnabled(true);
 
     connect(m_audio_lib, &AudioStreamingLibCore::commandXML, websettings, &Settings::processCommandXML);
 
+    connect(m_audio_lib, &AudioStreamingLibCore::warning, this, &MainWindow::warning);
     connect(m_audio_lib, &AudioStreamingLibCore::error, this, &MainWindow::error);
 
     connect(m_audio_lib, &AudioStreamingLibCore::inputLevel, levelinput, &LevelWidget::setlevel);
@@ -603,6 +643,9 @@ void MainWindow::client()
         return;
     }
 
+    if (comboboxaudioinput->count() == 0 || comboboxaudiooutput->count() == 0)
+        return;
+
     m_audio_lib = new AudioStreamingLibCore(this);
 
     QByteArray password = lineclientpassword->text().toLatin1();
@@ -610,18 +653,19 @@ void MainWindow::client()
     QAudioDeviceInfo inputdevinfo = comboboxaudioinput->currentData().value<QAudioDeviceInfo>();
     QAudioDeviceInfo outputdevinfo = comboboxaudiooutput->currentData().value<QAudioDeviceInfo>();
 
-    StreamingInfo info;
+    AudioStreamingLibInfo info;
 
     info.setInputDeviceInfo(inputdevinfo);
     info.setOutputDeviceInfo(outputdevinfo);
-    info.setWorkMode(StreamingInfo::StreamingWorkMode::WalkieTalkieClient);
+    info.setWorkMode(AudioStreamingLibInfo::StreamingWorkMode::WalkieTalkieClient);
     info.setEncryptionEnabled(!password.isEmpty());
     info.setGetAudioEnabled(true);
-    info.setNegotiationString(QByteArray("WalkieTalkieTCPDemo"));
+    info.setNegotiationString("WalkieTalkieTCPDemo");
     info.setID(lineclientid->text().trimmed());
 
     buttonrecord->setEnabled(true);
 
+    connect(m_audio_lib, &AudioStreamingLibCore::warning, this, &MainWindow::warning);
     connect(m_audio_lib, &AudioStreamingLibCore::error, this, &MainWindow::error);
 
     connect(m_audio_lib, &AudioStreamingLibCore::inputLevel, levelinput, &LevelWidget::setlevel);
@@ -666,6 +710,9 @@ void MainWindow::server()
         return;
     }
 
+    if (comboboxaudioinput->count() == 0 || comboboxaudiooutput->count() == 0)
+        return;
+
     m_audio_lib = new AudioStreamingLibCore(this);
 
     QByteArray password = lineserverpassword->text().toLatin1();
@@ -680,20 +727,21 @@ void MainWindow::server()
     format.setSampleType(QAudioFormat::Float);
     format.setByteOrder(QAudioFormat::LittleEndian);
 
-    StreamingInfo info;
+    AudioStreamingLibInfo info;
 
     info.setInputAudioFormat(format);
     info.setInputDeviceInfo(inputdevinfo);
     info.setOutputDeviceInfo(outputdevinfo);
-    info.setWorkMode(StreamingInfo::StreamingWorkMode::WalkieTalkieServer);
+    info.setWorkMode(AudioStreamingLibInfo::StreamingWorkMode::WalkieTalkieServer);
     info.setTimeToBuffer(linebuffertime->text().toInt());
     info.setEncryptionEnabled(!password.isEmpty());
     info.setGetAudioEnabled(true);
-    info.setNegotiationString(QByteArray("WalkieTalkieTCPDemo"));
+    info.setNegotiationString("WalkieTalkieTCPDemo");
     info.setID(lineserverid->text().trimmed());
 
     buttonrecord->setEnabled(true);
 
+    connect(m_audio_lib, &AudioStreamingLibCore::warning, this, &MainWindow::warning);
     connect(m_audio_lib, &AudioStreamingLibCore::error, this, &MainWindow::error);
 
     connect(m_audio_lib, &AudioStreamingLibCore::inputLevel, levelinput, &LevelWidget::setlevel);
@@ -739,8 +787,6 @@ void MainWindow::sliderVolumeValueChanged(int value)
 
 void MainWindow::webClientStarted(bool enable)
 {
-    comboboxaudioinput->setEnabled(enable);
-    comboboxaudiooutput->setEnabled(enable);
     widget2->setEnabled(enable);
     widget3->setEnabled(enable);
 
@@ -756,8 +802,6 @@ void MainWindow::webClientStarted(bool enable)
 
 void MainWindow::clientStarted(bool enable)
 {
-    comboboxaudioinput->setEnabled(enable);
-    comboboxaudiooutput->setEnabled(enable);
     widget1->setEnabled(enable);
     widget3->setEnabled(enable);
     linehost->setEnabled(enable);
@@ -768,8 +812,6 @@ void MainWindow::clientStarted(bool enable)
 
 void MainWindow::serverStarted(bool enable)
 {
-    comboboxaudioinput->setEnabled(enable);
-    comboboxaudiooutput->setEnabled(enable);
     widget1->setEnabled(enable);
     widget2->setEnabled(enable);
     lineportserver->setEnabled(enable);
@@ -994,6 +1036,12 @@ void MainWindow::webClientWarning(const QString &message)
     }
 }
 
+void MainWindow::warning(const QString &warning)
+{
+    if (!warning.isEmpty())
+        msgBoxWarning("Warning", warning, this);
+}
+
 void MainWindow::error(const QString &error)
 {
     if (m_msgbox_visible)
@@ -1010,7 +1058,7 @@ void MainWindow::adjustSettings()
 
     QAudioFormat inputFormat = m_audio_lib->inputAudioFormat();
     QAudioFormat format = m_audio_lib->audioFormat();
-    qint32 bufferTime = m_audio_lib->streamingInfo().timeToBuffer();
+    qint32 bufferTime = m_audio_lib->audioStreamingLibInfo().timeToBuffer();
 
     QString str;
 
@@ -1201,6 +1249,9 @@ void MainWindow::mixLocalPeer()
 
     while (m_local_audio.size() >= size && m_peer_audio.size() >= size)
     {
+        if (m_paused)
+            return;
+
         QByteArray mixed = AudioStreamingLibCore::mixFloatAudio(m_local_audio.mid(0, size), m_peer_audio.mid(0, size));
 
         m_local_audio.remove(0, size);
@@ -1211,6 +1262,8 @@ void MainWindow::mixLocalPeer()
             m_audio_recorder->write(AudioStreamingLibCore::convertFloatToInt16(mixed));
         else if (m_audio_recorder_mp3)
             m_audio_recorder_mp3->encode(AudioStreamingLibCore::convertFloatToInt16(mixed));
+        else
+            return;
 
         m_total_size += mixed.size() / int(sizeof(float) / sizeof(qint16));
 
@@ -1307,28 +1360,40 @@ void MainWindow::finished()
     setWindowTitle(TITLE);
 }
 
+void MainWindow::currentInputIndexChanged(int index)
+{
+    if (!m_audio_lib)
+        return;
+
+    QAudioDeviceInfo dev_info = comboboxaudioinput->itemData(index).value<QAudioDeviceInfo>();
+
+    m_audio_lib->changeInputDevice(dev_info);
+}
+
+void MainWindow::currentOutputIndexChanged(int index)
+{
+    if (!m_audio_lib)
+        return;
+
+    QAudioDeviceInfo dev_info = comboboxaudiooutput->itemData(index).value<QAudioDeviceInfo>();
+
+    m_audio_lib->changeOutputDevice(dev_info);
+}
+
 void MainWindow::getDevInfo()
 {
     QList<QAudioDeviceInfo> inputdevices = QAudioDeviceInfo::availableDevices(QAudio::AudioInput);
     QList<QAudioDeviceInfo> outputdevices = QAudioDeviceInfo::availableDevices(QAudio::AudioOutput);
 
-    if (!inputdevices.isEmpty())
-    {
-        for (int i = 0; i < inputdevices.size(); i++)
-            comboboxaudioinput->addItem(inputdevices.at(i).deviceName(), qVariantFromValue(inputdevices.at(i)));
-    }
-    else
-    {
-        msgBoxWarning("Error", "No input device found!");
-    }
+    for (int i = 0; i < inputdevices.size(); i++)
+        comboboxaudioinput->addItem(inputdevices.at(i).deviceName(), qVariantFromValue(inputdevices.at(i)));
 
-    if (!outputdevices.isEmpty())
-    {
-        for (int i = 0; i < outputdevices.size(); i++)
-            comboboxaudiooutput->addItem(outputdevices.at(i).deviceName(), qVariantFromValue(outputdevices.at(i)));
-    }
-    else
-    {
-        msgBoxWarning("Error", "No output device found!");
-    }
+    for (int i = 0; i < outputdevices.size(); i++)
+        comboboxaudiooutput->addItem(outputdevices.at(i).deviceName(), qVariantFromValue(outputdevices.at(i)));
+
+    connect(comboboxaudioinput, static_cast<void(QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+            this, &MainWindow::currentInputIndexChanged);
+
+    connect(comboboxaudiooutput, static_cast<void(QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+            this, &MainWindow::currentOutputIndexChanged);
 }

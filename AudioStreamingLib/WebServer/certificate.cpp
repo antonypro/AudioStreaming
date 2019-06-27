@@ -13,12 +13,19 @@ void Certificate::loadFunctions()
     if (m_loaded)
         return;
 
-#if defined(Q_OS_WIN) || defined(Q_OS_WINPHONE)
-    QLibrary openssl_crypto("libeay32");
-    QLibrary openssl_ssl("ssleay32");
+#ifndef OPENSSL
+#if defined Q_OS_WIN64
+    const char *crypto = "libcrypto-1_1-x64";
+    const char *ssl = "libssl-1_1-x64";
+#elif defined Q_OS_WIN32
+    const char *crypto = "libcrypto-1_1";
+    const char *ssl = "libssl-1_1";
 #else
-    QLibrary openssl_crypto("crypto");
-    QLibrary openssl_ssl("ssl");
+    const char *crypto = "crypto";
+    const char *ssl = "ssl";
+#endif
+    QLibrary openssl_crypto(crypto);
+    QLibrary openssl_ssl(ssl);
 #endif
 
     if (!openssl_crypto.load())
@@ -105,6 +112,12 @@ void Certificate::loadFunctions()
     if (!(pSSL_library_init = reinterpret_cast<tSSL_library_init>(openssl_ssl.resolve("SSL_library_init"))))
         return;
 
+    if (!(pX509_getm_notBefore = reinterpret_cast<tX509_getm_notBefore>(openssl_ssl.resolve("X509_getm_notBefore"))))
+        return;
+
+    if (!(pX509_getm_notAfter = reinterpret_cast<tX509_getm_notAfter>(openssl_ssl.resolve("X509_getm_notAfter"))))
+        return;
+
     m_loaded = true;
 }
 
@@ -156,8 +169,8 @@ X509 *Certificate::generate_x509(EVP_PKEY *pkey)
     pASN1_INTEGER_set(pX509_get_serialNumber(x509), 1);
 
     /* This certificate is valid from now until exactly one year from now. */
-    pX509_gmtime_adj(X509_get_notBefore(x509), 0);
-    pX509_gmtime_adj(X509_get_notAfter(x509), 31536000L);
+    pX509_gmtime_adj(pX509_getm_notBefore(x509), 0);
+    pX509_gmtime_adj(pX509_getm_notAfter(x509), 31536000L);
 
     /* Set the public key for our certificate. */
     pX509_set_pubkey(x509, pkey);

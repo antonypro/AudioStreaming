@@ -19,6 +19,8 @@ void AudioInput::startPrivate(const QAudioDeviceInfo &devinfo,
     m_supported_format.setSampleSize(16);
     m_supported_format.setSampleType(QAudioFormat::SignedInt);
 
+    m_supported_format.setChannelCount(qMin(m_supported_format.channelCount(), 2));
+
     //Check if format is supported by the choosen input device
     if (!devinfo.isFormatSupported(m_supported_format))
     {
@@ -28,9 +30,9 @@ void AudioInput::startPrivate(const QAudioDeviceInfo &devinfo,
 
         bool found_format = true;
 
-        if (m_supported_format.sampleRate() != format.sampleRate())
+        if (m_supported_format.sampleType() != QAudioFormat::SignedInt && m_supported_format.sampleType() != QAudioFormat::Float)
             found_format = false;
-        else if (m_supported_format.channelCount() != format.channelCount())
+        else if (m_supported_format.channelCount() > 8)
             found_format = false;
         else if (m_supported_format.byteOrder() != QAudioFormat::LittleEndian)
             found_format = false;
@@ -57,7 +59,17 @@ void AudioInput::startPrivate(const QAudioDeviceInfo &devinfo,
         }
     }
 
+    m_resampler = new r8brain(this);
+
+    connect(m_resampler, &r8brain::error, this, &AudioInput::error);
+    connect(m_resampler, &r8brain::resampled, this, &AudioInput::resampledData);
+
+    m_resampler->start(m_supported_format.sampleRate(), m_format.sampleRate(),
+                       m_supported_format.channelCount(), m_format.channelCount(),
+                       m_format.sampleSize());
+
     LIB_DEBUG_LEVEL_1("Input format used by device:" << m_supported_format);
+    LIB_DEBUG_LEVEL_1("Resampled format from input to library:" << m_format);
 
     //Initialize the audio input device
     m_audio_input = new QAudioInput(devinfo, m_supported_format, this);
@@ -84,11 +96,17 @@ void AudioInput::start(const QAudioDeviceInfo &devinfo, const QAudioFormat &form
 void AudioInput::readyReadPrivate()
 {
     //Read sound samples from input device to buffer
-    QByteArray data = m_device->readAll();
+    QByteArray samples = m_device->readAll();
 
-    if (m_format != m_supported_format)
-        data = convertSamplesToFloat(data, m_supported_format);
+    if (!samples.isEmpty() && m_supported_format.sampleType() == QAudioFormat::SignedInt)
+        samples = convertSamplesToFloat(samples, m_supported_format);
 
+    if (m_resampler)
+        m_resampler->write(samples);
+}
+
+void AudioInput::resampledData(const QByteArray &data)
+{
     LIB_DEBUG_LEVEL_2("Got" << sizeToTime(data.size(), m_format) << "ms from input device.");
 
     //Expose the input data to worker class

@@ -52,7 +52,7 @@ void LevelMeter::writePrivate(const QByteArray &data)
 
     samples = samples.array().abs();
 
-    m_buffer.append(reinterpret_cast<char*>(samples.data()), samples.size() * int(sizeof(float)));
+    m_buffer.append(reinterpret_cast<char*>(samples.data()), int(samples.size()) * int(sizeof(float)));
 
     process();
 }
@@ -64,13 +64,16 @@ void LevelMeter::write(const QByteArray &data)
 
 void LevelMeter::process()
 {
-    QByteArray middle = m_buffer;
+    QByteArray data = m_buffer;
     m_buffer.clear();
 
-    if (middle.isEmpty())
+    if (data.isEmpty())
         return;
 
-    Eigen::Ref<Eigen::VectorXf> samples = Eigen::Map<Eigen::VectorXf>(reinterpret_cast<float*>(middle.data()), middle.size() / int(sizeof(float)));
+    if (data.size() % int(sizeof(float)) != 0)
+        return;
+
+    Eigen::Ref<Eigen::VectorXf> samples = Eigen::Map<Eigen::VectorXf>(reinterpret_cast<float*>(data.data()), data.size() / int(sizeof(float)));
 
     m_level = samples.maxCoeff();
 }

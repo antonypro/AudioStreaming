@@ -24,10 +24,12 @@ public slots:
 private slots:
     void startPrivate(const QAudioDeviceInfo &devinfo, const QAudioFormat &format);
     void readyReadPrivate();
+    void resampledData(const QByteArray &data);
 
 private:
     QPointer<QAudioInput> m_audio_input;
     QPointer<QIODevice> m_device;
+    QPointer<r8brain> m_resampler;
     QAudioFormat m_format;
     QAudioFormat m_supported_format;
 };

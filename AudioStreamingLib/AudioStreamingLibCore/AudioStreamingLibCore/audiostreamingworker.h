@@ -17,7 +17,6 @@
 #ifdef OPUS
 #include "opusdecoderclass.h"
 #include "opusencoderclass.h"
-#include "r8brain.h"
 #endif
 
 //\cond HIDDEN_SYMBOLS
@@ -45,10 +44,13 @@ signals:
     void adjustSettings();
     void extraDataWritten();
     void commandXML(QByteArray);
+    void warning(QString);
     void error(QString);
 
 public slots:
-    void start(const StreamingInfo &streaming_info);
+    void start(const AudioStreamingLibInfo &streaming_info);
+    void changeInputDevice(const QAudioDeviceInfo &dev_info);
+    void changeOutputDevice(const QAudioDeviceInfo &dev_info);
     void listen(quint16 port, bool auto_accept, const QByteArray &password, int max_connections);
     void connectToHost(const QString &host, quint16 port, const QByteArray &password);
     void writeCommandXML(const QByteArray &XML);
@@ -65,17 +67,26 @@ public slots:
     void setInputMuted(bool mute);
     int volume() const;
     void setVolume(int volume);
-    StreamingInfo streamingInfo() const;
+    AudioStreamingLibInfo audioStreamingLibInfo() const;
     QList<QHostAddress> connectionsList() const;
     bool isReadyToWriteExtraData() const;
 
 private slots:
+    void startInputAudioWorkers();
+    void startOutputAudioWorkers();
     void startAudioWorkers();
+    void restartActiveWorkers();
+    void stopInputAudioWorkers();
+    void stopOutputAudioWorkers();
     void stopAudioWorkers();
+    void restartInputLater();
+    void restartOutputLater();
+    void warningInputPrivate(const QString &warning_description);
+    void warningOutputPrivate(const QString &warning_description);
     void errorPrivate(const QString &error_description);
     void startOpusEncoder();
     void startOpusDecoder();
-    void adjustSettingsPrivate(bool start_opus_encoder, bool start_opus_decoder, bool client_mode);
+    void adjustSettingsPrivate(bool client_mode);
     void serverClientConencted(const PeerData &pd, const QString &id);
     void serverClientDisconencted(const PeerData &pd);
     void clientConencted(const PeerData &pd, const QString &id);
@@ -86,7 +97,7 @@ private slots:
     void posProcessedInput(const QByteArray &data);
     void preProcessOutput(const QByteArray &data);
     void posProcessedOutput(const QByteArray &data);
-    void flowControl(int bytes);
+    void flowControl(const QByteArray &data);
     void processServerInput(const PeerData &pd);
     void processClientInput(const PeerData &pd);
     void processWebClientInput(const PeerData &pd);
@@ -114,12 +125,17 @@ private:
     int m_volume;
     bool m_has_error;
     bool m_is_walkie_talkie;
-    StreamingInfo m_streaming_info;
+    AudioStreamingLibInfo m_streaming_info;
     bool m_ready_to_write_extra_data;
     int m_extra_data_peers;
     QList<qintptr> m_id_connections_list;
     QList<QHostAddress> m_host_connections_list;
     bool m_callback_enabled;
+    bool m_input_device_running;
+    bool m_output_device_running;
+    bool m_workers_started_later;
+    bool m_input_device_changing;
+    bool m_output_device_changing;
 
     QHash<qintptr, qint32> m_hash_heart_beat;
     QHash<qintptr, QElapsedTimer> m_hash_heart_beat_time;

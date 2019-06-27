@@ -5,7 +5,6 @@
 #include <limits>
 #include <r8bbase.h>
 #include <CDSPResampler.h>
-#include "common.h"
 
 //\cond HIDDEN_SYMBOLS
 using namespace r8b;
@@ -24,19 +23,19 @@ signals:
     void error(QString);
 
 public slots:
-    void start(int in_sample_rate, int out_sample_rate, int channels, int sample_size);
+    void start(int in_sample_rate, int out_sample_rate, int in_channels, int out_channels, int sample_size);
     void write(const QByteArray &input);
 
 private slots:
-    void startPrivate(int in_sample_rate, int out_sample_rate, int channels, int sample_size);
+    void startPrivate(int in_sample_rate, int out_sample_rate, int in_channels, int out_channels, int sample_size);
     void writePrivate(const QByteArray &input);
 
 private:
     int m_bits;
     int m_channels_input;
     int m_channels_output;
-    CFixedBuffer<double> *m_InBufs;
-    CPtrKeeper<CDSPResampler24*> *m_Resamps;
+    CFixedBuffer<double> *m_in_bufs;
+    CPtrKeeper<CDSPResampler24*> *m_resamps;
     double **m_opp;
     bool m_initialized;
 };

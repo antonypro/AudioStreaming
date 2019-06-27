@@ -13,15 +13,16 @@ class AudioStreamingWorker;
 
 #define MAX_ID_LENGTH 20
 
-/** The StreamingInfo class contains most settings of the library.
+/** The AudioStreamingLibInfo class contains most settings of the library. This class replaces ```StreamingInfo```.
  *
- * **Note:** You should not keep a copy of it, when needed request it by calling *AudioStreamingLibCore::streamingInfo()* function.
+ * **Note:** You should not keep a copy of it, when needed request it by calling *audioStreamingLibInfo()*
+ * function of the *AudioStreamingLibCore* class.
  */
-class StreamingInfo
+class AudioStreamingLibInfo
 {
 public:
     /** Creates the instance and initialize variables. */
-    StreamingInfo()
+    AudioStreamingLibInfo()
     {
         //Default values
         m_id = QString(MAX_ID_LENGTH, char(0));
@@ -193,14 +194,16 @@ public:
      *
      * The possible values are:
      *
-     * `Undefined,
-     * BroadcastClient,
-     * BroadcastServer,
-     * WalkieTalkieClient,
-     * WalkieTalkieServer,
-     * WebClient`
+     * ```
+     * Undefined
+     * BroadcastClient
+     * BroadcastServer
+     * WalkieTalkieClient
+     * WalkieTalkieServer
+     * WebClient
+     * ```
      *
-     * The default value is `Undefined`.
+     * The default value is ```Undefined```.
      */
     void setWorkMode(const StreamingWorkMode &work_mode)
     {
@@ -224,10 +227,12 @@ public:
      *
      * The possible values are:
      *
-     * `LibraryAudioDevice,
-     * CustomAudioDevice`
+     * ```
+     * LibraryAudioDevice
+     * CustomAudioDevice
+     * ```
      *
-     * The default is `LibraryAudioDevice`.
+     * The default is ```LibraryAudioDevice```.
      */
     void setInputDeviceType(const AudioDeviceType &input_type)
     {
@@ -241,10 +246,12 @@ public:
      *
      * The possible values are:
      *
-     * `LibraryAudioDevice,
-     * CustomAudioDevice`
+     * ```
+     * LibraryAudioDevice
+     * CustomAudioDevice
+     * ```
      *
-     * The default is `LibraryAudioDevice`.
+     * The default is ```LibraryAudioDevice```.
      */
     void setOutputDeviceType(const AudioDeviceType &output_type)
     {
@@ -273,13 +280,13 @@ public:
         m_format.setCodec("audio/pcm");
     }
 
-    /** If using `LibraryAudioDevice` set the specific input device. */
+    /** If using ```LibraryAudioDevice``` set the specific input device. */
     void setInputDeviceInfo(const QAudioDeviceInfo &dev_info)
     {
         m_input = dev_info;
     }
 
-    /** If using `LibraryAudioDevice` set the specific output device. */
+    /** If using ```LibraryAudioDevice``` set the specific output device. */
     void setOutputDeviceInfo(const QAudioDeviceInfo &dev_info)
     {
         m_output = dev_info;
@@ -313,7 +320,7 @@ public:
     /** If enabled this route the input audio data to the output device,
      * so you can listen what you are streaming.
      *
-     * **Note:** this function have effect only in `BroadcastServer` mode!
+     * **Note:** this function have effect only in ```BroadcastServer``` mode!
      */
     void setListenAudioInputEnabled(bool enable)
     {
@@ -321,7 +328,7 @@ public:
     }
 
     /** Sets if encryption is enabled or not,
-     * note that the OpenSsl must be available to successfully start a encrypted server or client.
+     * note that the OpenSsl must be available to successfully start an encrypted server or client.
      */
     void setEncryptionEnabled(bool enable)
     {
@@ -346,10 +353,10 @@ private:
     bool m_encryption_enabled;
 };
 
-inline QDataStream &operator<<(QDataStream &stream, StreamingInfo &info);
-inline QDataStream &operator>>(QDataStream &stream, StreamingInfo &info);
+inline QDataStream &operator<<(QDataStream &stream, AudioStreamingLibInfo &info);
+inline QDataStream &operator>>(QDataStream &stream, AudioStreamingLibInfo &info);
 
-inline QDebug &operator<<(QDebug &debug, StreamingInfo &info);
+inline QDebug &operator<<(QDebug &debug, AudioStreamingLibInfo &info);
 
 /** The AudioStreamingLibCore class is the bridge between your app
  * and the internals of the AudioStreamingLib.
@@ -413,7 +420,7 @@ signals:
 
     /** Receive the input data if callback mode is enabled.
      *
-     * **Note:** Remember that you need to feedback the data by calling *inputDataBack()*
+     * **Note:** Remember that you need to feedback the data by calling *inputDataBack()*.
      */
     void inputData(QByteArray);
 
@@ -422,8 +429,8 @@ signals:
 
     /** Receive the output data if callback mode is enabled.
      *
-     * **Note:** Remember that you need to feedback the data by calling
-     * *outputDataBack()* if you configured to play audio.
+     * **Note:** Remember that you need to feedback the data by calling *outputDataBack()*
+     * if you configured to play audio.
      */
     void outputData(QByteArray);
 
@@ -455,8 +462,11 @@ signals:
     /** The library has stopped. */
     void finished();
 
-    /** Got a XML command from WebServer. */
+    /** Got an XML command from WebServer. */
     void commandXML(QByteArray);
+
+    /** The library has generated a warning, but not stopped.*/
+    void warning(QString);
 
     /** The library has stopped due to an error.
      *
@@ -465,8 +475,8 @@ signals:
     void error(QString);
 
 public slots:
-    /** Initialize the library with the given *StreamingInfo* settings. */
-    bool start(const StreamingInfo &streaming_info);
+    /** Initialize the library with the given *AudioStreamingLibInfo* settings. */
+    bool start(const AudioStreamingLibInfo &streaming_info);
 
     /** Stops the library, note that is called by destructor. */
     void stop();
@@ -474,10 +484,16 @@ public slots:
     /** Verify if library is currently running. */
     bool isRunning();
 
-    /** Create an instance of class for searching peers on
-     * local network and returns a pointer to the instance.
+    /** If some input device is already running, change the input device to ```dev_info```. */
+    void changeInputDevice(const QAudioDeviceInfo &dev_info);
+
+    /** If some output device is already running, change the output device to ```dev_info```. */
+    void changeOutputDevice(const QAudioDeviceInfo &dev_info);
+
+    /** Create an instance of a class for searching peers on
+     * local network and returns a pointer to this instance.
      *
-     * It will be auto deleted before `time_to_destroy` time elapsed(minimum accepted value 1000 ms),
+     * It will be auto deleted before ```time_to_destroy``` time elapsed(minimum accepted value 1000 ms),
      * also calling the function while discover client instance is running
      * will delete the instance and return a pointer to a new instance.
      */
@@ -490,8 +506,7 @@ public slots:
      * optional password and maximum connections
      * (Walkie Talkie Server ignore this option and always accepts only one connection).
      *
-     * **Note:** this **must** be called **after** calling
-     * *start()* with some server work mode option.
+     * **Note:** this **must** be called **after** calling *start()* with some server work mode option.
      */
     void listen(quint16 port, bool auto_accept = true, const QByteArray &password = QByteArray(), int max_connections = 30);
 
@@ -499,8 +514,7 @@ public slots:
      *
      * Also used to connect to the WebServer.
      *
-     * **Note:** this **must** be called **after** calling *start()*
-     * with some client work mode option.
+     * **Note:** this **must** be called **after** calling *start()* with some client work mode option.
      */
     void connectToHost(const QString &host, quint16 port, const QByteArray &password = QByteArray());
 
@@ -549,11 +563,11 @@ public slots:
     /** Returns the current output volume. */
     int volume();
 
-    /** Set the output volume with 0 as mute and 100 the loudest volume. */
+    /** Set the output volume with 0 as mute and 100 the loudest volume with attenuation and 150 with attenuation ignored. */
     void setVolume(int volume);
 
-    /** Returns a copy of current state of the *StreamingInfo* class. */
-    StreamingInfo streamingInfo();
+    /** Returns a copy of current state of the *AudioStreamingLibInfo* class. */
+    AudioStreamingLibInfo audioStreamingLibInfo();
 
     /** Returns a list of connected clients only useful in server mode. */
     QList<QHostAddress> connectionsList();

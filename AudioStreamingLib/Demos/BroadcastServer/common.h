@@ -70,8 +70,8 @@ static inline QString timeToString(qint64 ms)
 
 #define BUFFERTIME 5 * 1000 //ms
 
-#define SIZETOTIME(size) (size / (48 * 2 * int(sizeof(float))))
+#define SIZETOTIME(size) (size / (48000 / 1000 * 2 * int(sizeof(float))))
 
-#define TIMETOSIZE(time) (time * (48 * 2 * int(sizeof(float))))
+#define TIMETOSIZE(time) (time * (48000 / 1000 * 2 * int(sizeof(float))))
 
 #endif // COMMON_H

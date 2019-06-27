@@ -3,28 +3,16 @@
 
 #include <QtCore>
 #include <QtMultimedia>
-#include <eigen3/Eigen/Eigen>
-
-static inline qint64 nanoTimeToSize(qint64 nano_time, int channel_count, int sample_size, int sample_rate)
-{
-    qint64 value = (channel_count * (sample_size / 8) * sample_rate) * nano_time / qint64(qPow(1000, 3));
-
-    qint64 numToRound = value;
-    qint64 multiple = channel_count * (sample_size / 8);
-
-    if (multiple == 0)
-        return numToRound;
-
-    qint64 remainder = numToRound % multiple;
-    if (remainder == 0)
-        return numToRound;
-
-    return numToRound + multiple - remainder;
-}
+#include <Eigen/Eigen>
 
 static inline qint64 timeToSize(qint64 ms_time, int channel_count, int sample_size, int sample_rate)
 {
-    return nanoTimeToSize(ms_time * qint64(qPow(1000, 2)), channel_count, sample_size, sample_rate);
+    qint64 value = qint64(qCeil(channel_count * (sample_size / 8) * sample_rate / qreal(1000) * ms_time));
+
+    if (value % (channel_count * (sample_size / 8)) != 0)
+        value += (channel_count * (sample_size / 8) - value % (channel_count * (sample_size / 8)));
+
+    return value;
 }
 
 static inline qint64 timeToSize(qint64 ms_time, const QAudioFormat &format)
@@ -32,16 +20,9 @@ static inline qint64 timeToSize(qint64 ms_time, const QAudioFormat &format)
     return timeToSize(ms_time, format.channelCount(), format.sampleSize(), format.sampleRate());
 }
 
-static inline qint64 sizeToNanoTime(qint64 bytes, int channel_count, int sample_size, int sample_rate)
-{
-    int divider = ((sample_size / 8) * channel_count * sample_rate);
-    if (divider == 0) return 0;
-    return (bytes * qint64(qPow(1000, 3)) / divider);
-}
-
 static inline qint64 sizeToTime(qint64 bytes, int channel_count, int sample_size, int sample_rate)
 {
-    return sizeToNanoTime(bytes, channel_count, sample_size, sample_rate) / qint64(qPow(1000, 2));
+    return qint64(qFloor(bytes / (channel_count * (sample_size / 8) * sample_rate / qreal(1000))));
 }
 
 static inline qint64 sizeToTime(qint64 bytes, const QAudioFormat &format)

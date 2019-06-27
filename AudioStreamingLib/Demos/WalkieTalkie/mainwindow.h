@@ -36,6 +36,7 @@ private slots:
     void webClientStarted(bool enable);
     void clientStarted(bool enable);
     void serverStarted(bool enable);
+    void warning(const QString &warning);
     void error(const QString &error);
     void adjustSettings();
     void setRecordPath();
@@ -59,6 +60,8 @@ private slots:
     void writeText();
     void receiveText(const QByteArray &data);
     void finished();
+    void currentInputIndexChanged(int index);
+    void currentOutputIndexChanged(int index);
     void getDevInfo();
 
 private:
@@ -153,6 +156,8 @@ private:
     QCheckBox *boxautostart;
 
     QPlainTextEdit *texteditlog;
+    QCheckBox *boxlogtowidget;
+    QPushButton *buttonclearlog;
 
     QPointer<AudioRecorder> m_audio_recorder;
     QPointer<MP3Recorder> m_audio_recorder_mp3;

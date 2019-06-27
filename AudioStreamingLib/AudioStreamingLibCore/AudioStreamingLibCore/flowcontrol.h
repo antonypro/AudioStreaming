@@ -13,19 +13,20 @@ public:
 
 signals:
     void error(QString);
-    void getbytes(int);
+    void readyRead(QByteArray);
 
 public slots:
     void start(int sample_rate, int channels, int bits_per_sample);
 
 private slots:
-    void askforbytes();
+    void askForBytes();
 
 private:
     QElapsedTimer m_time;
     qint64 m_elapsed_time;
 
     QPointer<QTimer> m_timer;
+    QPointer<r8brain> m_resampler;
 
     int m_sample_rate;
     int m_channels;

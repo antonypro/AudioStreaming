@@ -9,11 +9,16 @@ qint64 record_count = 0;
     (m_streaming_info.inputAudioFormat().isValid() &&\
     (m_streaming_info.inputAudioFormat().sampleType() != QAudioFormat::Float ||\
     m_streaming_info.inputAudioFormat().sampleSize() != 32 ||\
-    m_streaming_info.inputAudioFormat().byteOrder() != QAudioFormat::LittleEndian)) ||\
+    m_streaming_info.inputAudioFormat().byteOrder() != QAudioFormat::LittleEndian ||\
+    m_streaming_info.inputAudioFormat().sampleRate() < 8000 ||\
+    m_streaming_info.inputAudioFormat().sampleRate() > 192000))\
+    ||\
     (m_streaming_info.audioFormat().isValid() &&\
     (m_streaming_info.audioFormat().sampleType() != QAudioFormat::Float ||\
     m_streaming_info.audioFormat().sampleSize() != 32 ||\
-    m_streaming_info.audioFormat().byteOrder() != QAudioFormat::LittleEndian))
+    m_streaming_info.audioFormat().byteOrder() != QAudioFormat::LittleEndian ||\
+    m_streaming_info.audioFormat().sampleRate() < 8000 ||\
+    m_streaming_info.audioFormat().sampleRate() > 192000))\
 
 AudioStreamingWorker::AudioStreamingWorker(QObject *parent) : QObject(parent)
 {
@@ -24,6 +29,11 @@ AudioStreamingWorker::AudioStreamingWorker(QObject *parent) : QObject(parent)
     m_ready_to_write_extra_data = false;
     m_extra_data_peers = 0;
     m_callback_enabled = false;
+    m_input_device_running = false;
+    m_output_device_running = false;
+    m_workers_started_later = false;
+    m_input_device_changing = false;
+    m_output_device_changing = false;
 
 #ifdef OPUS
     m_frame_size = 0;
@@ -39,17 +49,17 @@ AudioStreamingWorker::~AudioStreamingWorker()
     STOP_THREAD
 }
 
-void AudioStreamingWorker::start(const StreamingInfo &streaming_info)
+void AudioStreamingWorker::start(const AudioStreamingLibInfo &streaming_info)
 {
     m_streaming_info = streaming_info;
 
-    if (m_streaming_info.workMode() == StreamingInfo::StreamingWorkMode::Undefined)
+    if (m_streaming_info.workMode() == AudioStreamingLibInfo::StreamingWorkMode::Undefined)
     {
         errorPrivate("Mode of work not defined!");
         return;
     }
 
-    if (m_streaming_info.workMode() != StreamingInfo::StreamingWorkMode::BroadcastServer &&
+    if (m_streaming_info.workMode() != AudioStreamingLibInfo::StreamingWorkMode::BroadcastServer &&
             m_streaming_info.isListenAudioInputEnabled())
     {
         errorPrivate("Listen input is allowed only on broadcast mode!");
@@ -58,13 +68,13 @@ void AudioStreamingWorker::start(const StreamingInfo &streaming_info)
 
     if (INVALID_FORMAT)
     {
-        errorPrivate("Sample type and/or endiannes not supported!");
+        errorPrivate("Invalid format!");
         return;
     }
 
     switch (m_streaming_info.workMode())
     {
-    case StreamingInfo::StreamingWorkMode::BroadcastClient:
+    case AudioStreamingLibInfo::StreamingWorkMode::BroadcastClient:
     {
         if (m_streaming_info.isEncryptionEnabled())
             m_client = new EncryptedClient(this);
@@ -78,7 +88,7 @@ void AudioStreamingWorker::start(const StreamingInfo &streaming_info)
 
         break;
     }
-    case StreamingInfo::StreamingWorkMode::BroadcastServer:
+    case AudioStreamingLibInfo::StreamingWorkMode::BroadcastServer:
     {
         m_callback_enabled = m_streaming_info.isCallBackEnabled();
 
@@ -95,14 +105,20 @@ void AudioStreamingWorker::start(const StreamingInfo &streaming_info)
         connect(m_server, &AbstractServer::pending, this, &AudioStreamingWorker::pending);
         connect(m_server, &AbstractServer::readyRead, this, &AudioStreamingWorker::processServerInput);
 
+        adjustSettingsPrivate(false);
+
         startAudioWorkers();
+
+        restartActiveWorkers();
 
         break;
     }
-    case StreamingInfo::StreamingWorkMode::WalkieTalkieServer:
-    case StreamingInfo::StreamingWorkMode::WalkieTalkieClient:
+    case AudioStreamingLibInfo::StreamingWorkMode::WalkieTalkieServer:
+    case AudioStreamingLibInfo::StreamingWorkMode::WalkieTalkieClient:
     {
-        if (m_streaming_info.workMode() == StreamingInfo::StreamingWorkMode::WalkieTalkieClient)
+        m_is_walkie_talkie = true;
+
+        if (m_streaming_info.workMode() == AudioStreamingLibInfo::StreamingWorkMode::WalkieTalkieClient)
         {
             if (m_streaming_info.isEncryptionEnabled())
                 m_client = new EncryptedClient(this);
@@ -114,7 +130,7 @@ void AudioStreamingWorker::start(const StreamingInfo &streaming_info)
             connect(m_client, &AbstractClient::disconnected, this, &AudioStreamingWorker::clientDisconencted);
             connect(m_client, &AbstractClient::readyRead, this, &AudioStreamingWorker::processClientInput);
         }
-        else if (m_streaming_info.workMode() == StreamingInfo::StreamingWorkMode::WalkieTalkieServer)
+        else if (m_streaming_info.workMode() == AudioStreamingLibInfo::StreamingWorkMode::WalkieTalkieServer)
         {
             m_server_discover = new DiscoverServer(this);
 
@@ -129,12 +145,16 @@ void AudioStreamingWorker::start(const StreamingInfo &streaming_info)
             connect(m_server, &AbstractServer::pending, this, &AudioStreamingWorker::pending);
             connect(m_server, &AbstractServer::readyRead, this, &AudioStreamingWorker::processServerInput);
 
+            adjustSettingsPrivate(false);
+
             startAudioWorkers();
+
+            restartActiveWorkers();
         }
 
         break;
     }
-    case StreamingInfo::StreamingWorkMode::WebClient:
+    case AudioStreamingLibInfo::StreamingWorkMode::WebClient:
     {
         if (m_streaming_info.isEncryptionEnabled())
         {
@@ -146,6 +166,8 @@ void AudioStreamingWorker::start(const StreamingInfo &streaming_info)
             return;
         }
 
+        m_is_walkie_talkie = true;
+
         connect(m_client, &AbstractClient::error, this, &AudioStreamingWorker::errorPrivate);
         connect(m_client, &AbstractClient::connectedToServer, this, &AudioStreamingWorker::webClientConencted);
         connect(m_client, &AbstractClient::connectedToPeer, this, &AudioStreamingWorker::webClientConnectedToPeer);
@@ -156,7 +178,7 @@ void AudioStreamingWorker::start(const StreamingInfo &streaming_info)
         connect(m_client, &AbstractClient::readyRead, this, &AudioStreamingWorker::processWebClientInput);
         connect(m_client, &AbstractClient::commandXML, this, &AudioStreamingWorker::commandXML);
 
-        adjustSettingsPrivate(false, false, false);
+        adjustSettingsPrivate(false);
 
         break;
     }
@@ -165,48 +187,22 @@ void AudioStreamingWorker::start(const StreamingInfo &streaming_info)
     }
 }
 
-void AudioStreamingWorker::startAudioWorkers()
+void AudioStreamingWorker::startInputAudioWorkers()
 {
     switch (m_streaming_info.workMode())
     {
-    case StreamingInfo::StreamingWorkMode::BroadcastClient:
+    case AudioStreamingLibInfo::StreamingWorkMode::BroadcastClient:
     {
-        m_callback_enabled = m_streaming_info.isCallBackEnabled();
-#ifdef OPUS
-        m_opus_dec = new OpusDecoderClass(this);
-
-        connect(m_opus_dec, &OpusDecoderClass::decoded, this, &AudioStreamingWorker::posProcessedOutput);
-        connect(m_opus_dec, &OpusDecoderClass::error, this, &AudioStreamingWorker::errorPrivate);
-#endif
-        if (m_streaming_info.outputDeviceType() == StreamingInfo::AudioDeviceType::LibraryAudioDevice)
-        {
-            m_audio_output = new AudioOutput(this);
-
-            if (m_streaming_info.isGetAudioEnabled())
-                connect(m_audio_output, &AudioOutput::veryOutputData, this, &AudioStreamingWorker::veryOutputData);
-
-            connect(m_audio_output, &AudioOutput::error, this, &AudioStreamingWorker::errorPrivate);
-            connect(m_audio_output, &AudioOutput::currentlevel, this, &AudioStreamingWorker::outputLevel);
-
-            m_audio_output->setVolume(m_volume);
-        }
-        else //used to compute level if not using the library output device
-        {
-            m_level_meter_output = new LevelMeter(this);
-
-            connect(m_level_meter_output, &LevelMeter::currentlevel, this, &AudioStreamingWorker::outputLevel);
-        }
-
         break;
     }
-    case StreamingInfo::StreamingWorkMode::BroadcastServer:
+    case AudioStreamingLibInfo::StreamingWorkMode::BroadcastServer:
     {
         m_callback_enabled = m_streaming_info.isCallBackEnabled();
 #ifdef OPUS
         m_resampler = new r8brain(this);
         m_opus_enc = new OpusEncoderClass(this);
 
-        connect(m_resampler, &r8brain::error, this, &AudioStreamingWorker::errorPrivate);
+        connect(m_resampler, &r8brain::error, this, &AudioStreamingWorker::warningInputPrivate);
         connect(m_resampler, &r8brain::resampled, m_opus_enc, &OpusEncoderClass::write);
 
         if (m_streaming_info.isGetAudioEnabled() && !m_streaming_info.isListenAudioInputEnabled())
@@ -214,20 +210,18 @@ void AudioStreamingWorker::startAudioWorkers()
 
         connect(m_opus_enc, &OpusEncoderClass::encoded, this, &AudioStreamingWorker::posProcessedInput);
 
-        connect(m_opus_enc, &OpusEncoderClass::error, this, &AudioStreamingWorker::errorPrivate);
+        connect(m_opus_enc, &OpusEncoderClass::error, this, &AudioStreamingWorker::warningInputPrivate);
 #endif
-        if (m_streaming_info.inputDeviceType() == StreamingInfo::AudioDeviceType::LibraryAudioDevice)
+        if (m_streaming_info.inputDeviceType() == AudioStreamingLibInfo::AudioDeviceType::LibraryAudioDevice)
         {
             m_audio_input = new AudioInput(this);
 
-            connect(m_audio_input, &AudioInput::error, this, &AudioStreamingWorker::errorPrivate);
+            connect(m_audio_input, &AudioInput::error, this, &AudioStreamingWorker::warningInputPrivate);
 
             if (m_callback_enabled)
                 connect(m_audio_input, &AudioInput::readyRead, this, &AudioStreamingWorker::inputData);
             else
                 connect(m_audio_input, &AudioInput::readyRead, this, &AudioStreamingWorker::inputDataBack);
-
-            m_audio_input->start(m_streaming_info.inputDeviceInfo(), m_streaming_info.inputAudioFormat());
         }
         else
         {
@@ -235,66 +229,71 @@ void AudioStreamingWorker::startAudioWorkers()
 
             m_flow_control = new FlowControl(this);
 
-            connect(m_flow_control, &FlowControl::getbytes, this, &AudioStreamingWorker::flowControl);
-            connect(m_flow_control, &FlowControl::error, this, &AudioStreamingWorker::errorPrivate);
+            connect(m_flow_control, &FlowControl::readyRead, this, &AudioStreamingWorker::flowControl);
+            connect(m_flow_control, &FlowControl::error, this, &AudioStreamingWorker::error);
             m_flow_control->start(inputFormat.sampleRate(), inputFormat.channelCount(), inputFormat.sampleSize());
         }
-
-        adjustSettingsPrivate(true, false, false);
 
         m_level_meter_input = new LevelMeter(this);
 
         connect(m_level_meter_input, &LevelMeter::currentlevel, this, &AudioStreamingWorker::inputLevel);
-        m_level_meter_input->start(m_streaming_info.inputAudioFormat());
 
         if (m_streaming_info.isListenAudioInputEnabled())
         {
-            m_audio_output = new AudioOutput(this);
+            if (!m_audio_output)
+            {
+                m_audio_output = new AudioOutput(this);
 
-            connect(m_audio_output, &AudioOutput::error, this, &AudioStreamingWorker::errorPrivate);
-            connect(m_audio_output, &AudioOutput::currentlevel, this, &AudioStreamingWorker::outputLevel);
-            if (m_streaming_info.isGetAudioEnabled())
-                connect(m_audio_output, &AudioOutput::veryOutputData, this, &AudioStreamingWorker::veryInputData);
-            connect(m_audio_output, &AudioOutput::veryOutputData, m_level_meter_input, &LevelMeter::write);
+                connect(m_audio_output, &AudioOutput::error, this, &AudioStreamingWorker::warningOutputPrivate);
+                connect(m_audio_output, &AudioOutput::currentlevel, this, &AudioStreamingWorker::outputLevel);
+                if (m_streaming_info.isGetAudioEnabled())
+                    connect(m_audio_output, &AudioOutput::veryOutputData, this, &AudioStreamingWorker::veryInputData);
+                connect(m_audio_output, &AudioOutput::veryOutputData, m_level_meter_input, &LevelMeter::write);
+#ifdef OPUS
+                connect(m_resampler, &r8brain::resampled, m_audio_output, &AudioOutput::write);
+#endif
+                m_audio_output->setVolume(m_volume);
 
-            QAudioFormat format = m_streaming_info.inputAudioFormat();
-
-            m_audio_output->start(m_streaming_info.outputDeviceInfo(), format, 0, true);
-
-            m_audio_output->setVolume(m_volume);
+                m_audio_output->start(m_streaming_info.outputDeviceInfo(),
+                                      m_streaming_info.audioFormat(),
+                                      m_streaming_info.timeToBuffer(),
+                                      m_streaming_info.isGetAudioEnabled());
+            }
+            else
+            {
+                connect(m_audio_output, &AudioOutput::veryOutputData, m_level_meter_input, &LevelMeter::write);
+#ifdef OPUS
+                connect(m_resampler, &r8brain::resampled, m_audio_output, &AudioOutput::write);
+#endif
+            }
         }
 
         break;
     }
-    case StreamingInfo::StreamingWorkMode::WalkieTalkieServer:
-    case StreamingInfo::StreamingWorkMode::WalkieTalkieClient:
+    case AudioStreamingLibInfo::StreamingWorkMode::WalkieTalkieServer:
+    case AudioStreamingLibInfo::StreamingWorkMode::WalkieTalkieClient:
     {
         m_callback_enabled = m_streaming_info.isCallBackEnabled();
 
-        m_is_walkie_talkie = true;
 #ifdef OPUS
         m_resampler = new r8brain(this);
         m_opus_enc = new OpusEncoderClass(this);
-        m_opus_dec = new OpusDecoderClass(this);
 
-        connect(m_opus_enc, &OpusEncoderClass::error, this, &AudioStreamingWorker::errorPrivate);
-        connect(m_opus_dec, &OpusDecoderClass::error, this, &AudioStreamingWorker::errorPrivate);
+        connect(m_opus_enc, &OpusEncoderClass::error, this, &AudioStreamingWorker::warningInputPrivate);
 
-        connect(m_resampler, &r8brain::error, this, &AudioStreamingWorker::errorPrivate);
+        connect(m_resampler, &r8brain::error, this, &AudioStreamingWorker::warningInputPrivate);
         connect(m_resampler, &r8brain::resampled, m_opus_enc, &OpusEncoderClass::write);
 
         if (m_streaming_info.isGetAudioEnabled())
             connect(m_resampler, &r8brain::resampled, this, &AudioStreamingWorker::veryInputData);
 
         connect(m_opus_enc, &OpusEncoderClass::encoded, this, &AudioStreamingWorker::posProcessedInput);
-
-        connect(m_opus_dec, &OpusDecoderClass::decoded, this, &AudioStreamingWorker::posProcessedOutput);
 #endif
-        if (m_streaming_info.inputDeviceType() == StreamingInfo::AudioDeviceType::LibraryAudioDevice)
+        if (m_streaming_info.inputDeviceType() == AudioStreamingLibInfo::AudioDeviceType::LibraryAudioDevice)
         {
             m_audio_input = new AudioInput(this);
 
-            connect(m_audio_input, &AudioInput::error, this, &AudioStreamingWorker::errorPrivate);
+            connect(m_audio_input, &AudioInput::error, this, &AudioStreamingWorker::warningInputPrivate);
 
             if (m_callback_enabled)
                 connect(m_audio_input, &AudioInput::readyRead, this, &AudioStreamingWorker::inputData);
@@ -304,34 +303,21 @@ void AudioStreamingWorker::startAudioWorkers()
             m_level_meter_input = new LevelMeter(this);
 
             connect(m_level_meter_input, &LevelMeter::currentlevel, this, &AudioStreamingWorker::inputLevel);
-
-            if (m_streaming_info.workMode() == StreamingInfo::StreamingWorkMode::WalkieTalkieServer)
-            {
-                adjustSettingsPrivate(true, true, false);
-
-                m_level_meter_input->start(m_streaming_info.inputAudioFormat());
-
-                m_audio_input->start(m_streaming_info.inputDeviceInfo(), m_streaming_info.inputAudioFormat());
-            }
         }
         else //used to compute level if not using the library input device
         {
             m_flow_control = new FlowControl(this);
 
-            connect(m_flow_control, &FlowControl::getbytes, this, &AudioStreamingWorker::flowControl);
-            connect(m_flow_control, &FlowControl::error, this, &AudioStreamingWorker::errorPrivate);
+            connect(m_flow_control, &FlowControl::readyRead, this, &AudioStreamingWorker::flowControl);
+            connect(m_flow_control, &FlowControl::error, this, &AudioStreamingWorker::error);
 
             m_level_meter_input = new LevelMeter(this);
 
             connect(m_level_meter_input, &LevelMeter::currentlevel, this, &AudioStreamingWorker::inputLevel);
 
-            if (m_streaming_info.workMode() == StreamingInfo::StreamingWorkMode::WalkieTalkieServer)
+            if (m_streaming_info.workMode() == AudioStreamingLibInfo::StreamingWorkMode::WalkieTalkieServer)
             {
                 QAudioFormat inputFormat = m_streaming_info.inputAudioFormat();
-
-                adjustSettingsPrivate(true, true, false);
-
-                m_level_meter_input->start(m_streaming_info.inputAudioFormat());
 
                 m_flow_control->start(inputFormat.sampleRate(),
                                       inputFormat.channelCount(),
@@ -339,70 +325,30 @@ void AudioStreamingWorker::startAudioWorkers()
             }
         }
 
-        if (m_streaming_info.outputDeviceType() == StreamingInfo::AudioDeviceType::LibraryAudioDevice)
-        {
-            m_audio_output = new AudioOutput(this);
-
-            if (m_streaming_info.isGetAudioEnabled())
-                connect(m_audio_output, &AudioOutput::veryOutputData, this, &AudioStreamingWorker::veryOutputData);
-
-            connect(m_audio_output, &AudioOutput::error, this, &AudioStreamingWorker::errorPrivate);
-            connect(m_audio_output, &AudioOutput::currentlevel, this, &AudioStreamingWorker::outputLevel);
-
-            if (m_streaming_info.workMode() == StreamingInfo::StreamingWorkMode::WalkieTalkieServer)
-            {
-                QAudioFormat format = m_streaming_info.audioFormat();
-
-                m_audio_output->start(m_streaming_info.outputDeviceInfo(),
-                                      format, m_streaming_info.timeToBuffer(),
-                                      m_streaming_info.isGetAudioEnabled());
-            }
-
-            m_audio_output->setVolume(m_volume);
-        }
-        else //used to compute level if not using the library output device
-        {
-            m_level_meter_output = new LevelMeter(this);
-
-            connect(m_level_meter_output, &LevelMeter::currentlevel, this, &AudioStreamingWorker::outputLevel);
-
-            if (m_streaming_info.workMode() == StreamingInfo::StreamingWorkMode::WalkieTalkieServer)
-            {
-                QAudioFormat format = m_streaming_info.audioFormat();
-
-                m_level_meter_output->start(format);
-            }
-        }
-
         break;
     }
-    case StreamingInfo::StreamingWorkMode::WebClient:
+    case AudioStreamingLibInfo::StreamingWorkMode::WebClient:
     {
         m_callback_enabled = m_streaming_info.isCallBackEnabled();
 
-        m_is_walkie_talkie = true;
 #ifdef OPUS
         m_resampler = new r8brain(this);
         m_opus_enc = new OpusEncoderClass(this);
-        m_opus_dec = new OpusDecoderClass(this);
-        connect(m_opus_enc, &OpusEncoderClass::error, this, &AudioStreamingWorker::errorPrivate);
-        connect(m_opus_dec, &OpusDecoderClass::error, this, &AudioStreamingWorker::errorPrivate);
+        connect(m_opus_enc, &OpusEncoderClass::error, this, &AudioStreamingWorker::warningInputPrivate);
 
-        connect(m_resampler, &r8brain::error, this, &AudioStreamingWorker::errorPrivate);
+        connect(m_resampler, &r8brain::error, this, &AudioStreamingWorker::warningInputPrivate);
         connect(m_resampler, &r8brain::resampled, m_opus_enc, &OpusEncoderClass::write);
 
         if (m_streaming_info.isGetAudioEnabled())
             connect(m_resampler, &r8brain::resampled, this, &AudioStreamingWorker::veryInputData);
 
         connect(m_opus_enc, &OpusEncoderClass::encoded, this, &AudioStreamingWorker::posProcessedInput);
-
-        connect(m_opus_dec, &OpusDecoderClass::decoded, this, &AudioStreamingWorker::posProcessedOutput);
 #endif
-        if (m_streaming_info.inputDeviceType() == StreamingInfo::AudioDeviceType::LibraryAudioDevice)
+        if (m_streaming_info.inputDeviceType() == AudioStreamingLibInfo::AudioDeviceType::LibraryAudioDevice)
         {
             m_audio_input = new AudioInput(this);
 
-            connect(m_audio_input, &AudioInput::error, this, &AudioStreamingWorker::errorPrivate);
+            connect(m_audio_input, &AudioInput::error, this, &AudioStreamingWorker::warningInputPrivate);
 
             if (m_callback_enabled)
                 connect(m_audio_input, &AudioInput::readyRead, this, &AudioStreamingWorker::inputData);
@@ -417,8 +363,8 @@ void AudioStreamingWorker::startAudioWorkers()
         {
             m_flow_control = new FlowControl(this);
 
-            connect(m_flow_control, &FlowControl::getbytes, this, &AudioStreamingWorker::flowControl);
-            connect(m_flow_control, &FlowControl::error, this, &AudioStreamingWorker::errorPrivate);
+            connect(m_flow_control, &FlowControl::readyRead, this, &AudioStreamingWorker::flowControl);
+            connect(m_flow_control, &FlowControl::error, this, &AudioStreamingWorker::error);
 
             QAudioFormat inputFormat = m_streaming_info.inputAudioFormat();
 
@@ -431,14 +377,108 @@ void AudioStreamingWorker::startAudioWorkers()
                                   inputFormat.sampleSize());
         }
 
-        if (m_streaming_info.outputDeviceType() == StreamingInfo::AudioDeviceType::LibraryAudioDevice)
+        break;
+    }
+    default:
+        break;
+    }
+
+    m_input_device_running = true;
+}
+
+void AudioStreamingWorker::startOutputAudioWorkers()
+{
+    switch (m_streaming_info.workMode())
+    {
+    case AudioStreamingLibInfo::StreamingWorkMode::BroadcastClient:
+    {
+        m_callback_enabled = m_streaming_info.isCallBackEnabled();
+#ifdef OPUS
+        m_opus_dec = new OpusDecoderClass(this);
+
+        connect(m_opus_dec, &OpusDecoderClass::decoded, this, &AudioStreamingWorker::posProcessedOutput);
+
+        connect(m_opus_dec, &OpusDecoderClass::error, this, &AudioStreamingWorker::warningOutputPrivate);
+#endif
+        if (m_streaming_info.outputDeviceType() == AudioStreamingLibInfo::AudioDeviceType::LibraryAudioDevice)
         {
             m_audio_output = new AudioOutput(this);
 
             if (m_streaming_info.isGetAudioEnabled())
                 connect(m_audio_output, &AudioOutput::veryOutputData, this, &AudioStreamingWorker::veryOutputData);
 
-            connect(m_audio_output, &AudioOutput::error, this, &AudioStreamingWorker::errorPrivate);
+            connect(m_audio_output, &AudioOutput::error, this, &AudioStreamingWorker::warningOutputPrivate);
+            connect(m_audio_output, &AudioOutput::currentlevel, this, &AudioStreamingWorker::outputLevel);
+
+            m_audio_output->setVolume(m_volume);
+        }
+        else //used to compute level if not using the library output device
+        {
+            m_level_meter_output = new LevelMeter(this);
+
+            connect(m_level_meter_output, &LevelMeter::currentlevel, this, &AudioStreamingWorker::outputLevel);
+        }
+
+        break;
+    }
+    case AudioStreamingLibInfo::StreamingWorkMode::BroadcastServer:
+    {
+        break;
+    }
+    case AudioStreamingLibInfo::StreamingWorkMode::WalkieTalkieServer:
+    case AudioStreamingLibInfo::StreamingWorkMode::WalkieTalkieClient:
+    {
+        m_callback_enabled = m_streaming_info.isCallBackEnabled();
+
+#ifdef OPUS
+        m_opus_dec = new OpusDecoderClass(this);
+
+        connect(m_opus_dec, &OpusDecoderClass::error, this, &AudioStreamingWorker::warningOutputPrivate);
+
+        connect(m_opus_dec, &OpusDecoderClass::decoded, this, &AudioStreamingWorker::posProcessedOutput);
+#endif
+
+        if (m_streaming_info.outputDeviceType() == AudioStreamingLibInfo::AudioDeviceType::LibraryAudioDevice)
+        {
+            m_audio_output = new AudioOutput(this);
+
+            if (m_streaming_info.isGetAudioEnabled())
+                connect(m_audio_output, &AudioOutput::veryOutputData, this, &AudioStreamingWorker::veryOutputData);
+
+            connect(m_audio_output, &AudioOutput::error, this, &AudioStreamingWorker::warningOutputPrivate);
+            connect(m_audio_output, &AudioOutput::currentlevel, this, &AudioStreamingWorker::outputLevel);
+
+            m_audio_output->setVolume(m_volume);
+        }
+        else //used to compute level if not using the library output device
+        {
+            m_level_meter_output = new LevelMeter(this);
+
+            connect(m_level_meter_output, &LevelMeter::currentlevel, this, &AudioStreamingWorker::outputLevel);
+        }
+
+        break;
+    }
+    case AudioStreamingLibInfo::StreamingWorkMode::WebClient:
+    {
+        m_callback_enabled = m_streaming_info.isCallBackEnabled();
+
+#ifdef OPUS
+        m_opus_dec = new OpusDecoderClass(this);
+
+        connect(m_opus_dec, &OpusDecoderClass::error, this, &AudioStreamingWorker::warningOutputPrivate);
+
+        connect(m_opus_dec, &OpusDecoderClass::decoded, this, &AudioStreamingWorker::posProcessedOutput);
+#endif
+
+        if (m_streaming_info.outputDeviceType() == AudioStreamingLibInfo::AudioDeviceType::LibraryAudioDevice)
+        {
+            m_audio_output = new AudioOutput(this);
+
+            if (m_streaming_info.isGetAudioEnabled())
+                connect(m_audio_output, &AudioOutput::veryOutputData, this, &AudioStreamingWorker::veryOutputData);
+
+            connect(m_audio_output, &AudioOutput::error, this, &AudioStreamingWorker::warningOutputPrivate);
             connect(m_audio_output, &AudioOutput::currentlevel, this, &AudioStreamingWorker::outputLevel);
 
             m_audio_output->setVolume(m_volume);
@@ -455,14 +495,48 @@ void AudioStreamingWorker::startAudioWorkers()
     default:
         break;
     }
+
+    m_output_device_running = true;
 }
 
-void AudioStreamingWorker::stopAudioWorkers()
+void AudioStreamingWorker::startAudioWorkers()
+{
+    startInputAudioWorkers();
+    startOutputAudioWorkers();
+}
+
+void AudioStreamingWorker::restartActiveWorkers()
+{
+    if (m_audio_input)
+        m_audio_input->start(m_streaming_info.inputDeviceInfo(), m_streaming_info.inputAudioFormat());
+
+    if (m_level_meter_input)
+        m_level_meter_input->start(m_streaming_info.inputAudioFormat());
+
+    if (m_streaming_info.workMode() !=  AudioStreamingLibInfo::StreamingWorkMode::BroadcastServer)
+    {
+        if (m_audio_output)
+            m_audio_output->start(m_streaming_info.outputDeviceInfo(),
+                                  m_streaming_info.audioFormat(),
+                                  m_streaming_info.timeToBuffer(),
+                                  m_streaming_info.isGetAudioEnabled());
+    }
+
+    if (m_level_meter_output)
+        m_level_meter_output->start(m_streaming_info.audioFormat());
+
+#ifdef OPUS
+    startOpusEncoder();
+    startOpusDecoder();
+#endif
+
+    m_workers_started_later = true;
+}
+
+void AudioStreamingWorker::stopInputAudioWorkers()
 {
     if (m_audio_input)
         m_audio_input->deleteLater();
-    if (m_audio_output)
-        m_audio_output->deleteLater();
     if (m_flow_control)
         m_flow_control->deleteLater();
 #ifdef OPUS
@@ -470,13 +544,154 @@ void AudioStreamingWorker::stopAudioWorkers()
         m_resampler->deleteLater();
     if (m_opus_enc)
         m_opus_enc->deleteLater();
-    if (m_opus_dec)
-        m_opus_dec->deleteLater();
 #endif
     if (m_level_meter_input)
         m_level_meter_input->deleteLater();
+}
+
+void AudioStreamingWorker::stopOutputAudioWorkers()
+{
+    if (m_audio_output)
+        m_audio_output->deleteLater();
+#ifdef OPUS
+    if (m_opus_dec)
+        m_opus_dec->deleteLater();
+#endif
     if (m_level_meter_output)
         m_level_meter_output->deleteLater();
+}
+
+void AudioStreamingWorker::stopAudioWorkers()
+{
+    stopInputAudioWorkers();
+    stopOutputAudioWorkers();
+
+    m_input_device_running = false;
+    m_output_device_running = false;
+
+    m_workers_started_later = false;
+}
+
+void AudioStreamingWorker::changeInputDevice(const QAudioDeviceInfo &dev_info)
+{
+    if (m_streaming_info.inputDeviceType() != AudioStreamingLibInfo::AudioDeviceType::LibraryAudioDevice)
+    {
+        emit warning("The input device type isn't 'LibraryAudioDevice'");
+        return;
+    }
+
+    if (!m_input_device_running)
+    {
+        emit warning("No input device running, nothing to change!'");
+        return;
+    }
+
+    if (m_input_device_changing)
+    {
+        QMetaObject::invokeMethod(this, "changeInputDevice", Qt::QueuedConnection, Q_ARG(QAudioDeviceInfo, dev_info));
+        return;
+    }
+
+    m_input_device_changing = true;
+
+    if (m_audio_input)
+        connect(m_audio_input, &QObject::destroyed, this, &AudioStreamingWorker::restartInputLater, Qt::UniqueConnection);
+    if (m_flow_control)
+        connect(m_flow_control, &QObject::destroyed, this, &AudioStreamingWorker::restartInputLater, Qt::UniqueConnection);
+#ifdef OPUS
+    if (m_resampler)
+        connect(m_resampler, &QObject::destroyed, this, &AudioStreamingWorker::restartInputLater, Qt::UniqueConnection);
+    if (m_opus_enc)
+        connect(m_opus_enc, &QObject::destroyed, this, &AudioStreamingWorker::restartInputLater, Qt::UniqueConnection);
+#endif
+    if (m_level_meter_input)
+        connect(m_level_meter_input, &QObject::destroyed, this, &AudioStreamingWorker::restartInputLater, Qt::UniqueConnection);
+
+    stopInputAudioWorkers();
+
+    m_streaming_info.setInputDeviceInfo(dev_info);
+
+    restartInputLater();
+}
+
+void AudioStreamingWorker::restartInputLater()
+{
+    if (m_audio_input)
+        return;
+    if (m_flow_control)
+        return;
+#ifdef OPUS
+    if (m_resampler)
+        return;
+    if (m_opus_enc)
+        return;
+#endif
+    if (m_level_meter_input)
+        return;
+
+    startInputAudioWorkers();
+
+    if (m_workers_started_later)
+        restartActiveWorkers();
+
+    m_input_device_changing = false;
+}
+
+void AudioStreamingWorker::changeOutputDevice(const QAudioDeviceInfo &dev_info)
+{
+    if (m_streaming_info.outputDeviceType() != AudioStreamingLibInfo::AudioDeviceType::LibraryAudioDevice)
+    {
+        emit warning("The output device type isn't 'LibraryAudioDevice'");
+        return;
+    }
+
+    if (!m_output_device_running)
+    {
+        emit warning("No output device running, nothing to change!'");
+        return;
+    }
+
+    if (m_output_device_changing)
+    {
+        QMetaObject::invokeMethod(this, "changeOutputDevice", Qt::QueuedConnection, Q_ARG(QAudioDeviceInfo, dev_info));
+        return;
+    }
+
+    m_output_device_changing = true;
+
+    if (m_audio_output)
+        connect(m_audio_output, &QObject::destroyed, this, &AudioStreamingWorker::restartOutputLater, Qt::UniqueConnection);
+#ifdef OPUS
+    if (m_opus_dec)
+        connect(m_opus_dec, &QObject::destroyed, this, &AudioStreamingWorker::restartOutputLater, Qt::UniqueConnection);
+#endif
+    if (m_level_meter_output)
+        connect(m_level_meter_output, &QObject::destroyed, this, &AudioStreamingWorker::restartOutputLater, Qt::UniqueConnection);
+
+    stopOutputAudioWorkers();
+
+    m_streaming_info.setOutputDeviceInfo(dev_info);
+
+    restartOutputLater();
+}
+
+void AudioStreamingWorker::restartOutputLater()
+{
+    if (m_audio_output)
+        return;
+#ifdef OPUS
+    if (m_opus_dec)
+        return;
+#endif
+    if (m_level_meter_output)
+        return;
+
+    startOutputAudioWorkers();
+
+    if (m_workers_started_later)
+        restartActiveWorkers();
+
+    m_output_device_changing = false;
 }
 
 void AudioStreamingWorker::listen(quint16 port, bool auto_accept, const QByteArray &password, int max_connections)
@@ -524,7 +739,7 @@ void AudioStreamingWorker::writeCommandXML(const QByteArray &XML)
 
 void AudioStreamingWorker::connectToPeer(const QString &ID)
 {
-    if (m_streaming_info.workMode() == StreamingInfo::StreamingWorkMode::WebClient)
+    if (m_streaming_info.workMode() == AudioStreamingLibInfo::StreamingWorkMode::WebClient)
     {
         m_client->connectToPeer(ID);
     }
@@ -532,7 +747,7 @@ void AudioStreamingWorker::connectToPeer(const QString &ID)
 
 void AudioStreamingWorker::disconnectFromPeer()
 {
-    if (m_streaming_info.workMode() == StreamingInfo::StreamingWorkMode::WebClient)
+    if (m_streaming_info.workMode() == AudioStreamingLibInfo::StreamingWorkMode::WebClient)
     {
         m_client->disconnectFromPeer();
     }
@@ -560,6 +775,20 @@ void AudioStreamingWorker::rejectConnection()
         m_client->rejectConnection();
 }
 
+void AudioStreamingWorker::warningInputPrivate(const QString &warning_description)
+{
+    stopInputAudioWorkers();
+
+    emit warning(warning_description);
+}
+
+void AudioStreamingWorker::warningOutputPrivate(const QString &warning_description)
+{
+    stopOutputAudioWorkers();
+
+    emit warning(warning_description);
+}
+
 void AudioStreamingWorker::errorPrivate(const QString &error_description)
 {
     if (m_has_error)
@@ -577,12 +806,12 @@ void AudioStreamingWorker::startOpusEncoder()
 
     switch (m_streaming_info.workMode())
     {
-    case StreamingInfo::StreamingWorkMode::BroadcastServer:
+    case AudioStreamingLibInfo::StreamingWorkMode::BroadcastServer:
         application = OPUS_APPLICATION_AUDIO;
         break;
-    case StreamingInfo::StreamingWorkMode::WalkieTalkieClient:
-    case StreamingInfo::StreamingWorkMode::WalkieTalkieServer:
-    case StreamingInfo::StreamingWorkMode::WebClient:
+    case AudioStreamingLibInfo::StreamingWorkMode::WalkieTalkieClient:
+    case AudioStreamingLibInfo::StreamingWorkMode::WalkieTalkieServer:
+    case AudioStreamingLibInfo::StreamingWorkMode::WebClient:
         application = OPUS_APPLICATION_VOIP;
         break;
     default:
@@ -592,16 +821,19 @@ void AudioStreamingWorker::startOpusEncoder()
     QAudioFormat inputAudioFormat = m_streaming_info.inputAudioFormat();
     QAudioFormat audioFormat = m_streaming_info.audioFormat();
 
-    m_resampler->start(inputAudioFormat.sampleRate(),
-                       audioFormat.sampleRate(),
-                       inputAudioFormat.channelCount(),
-                       inputAudioFormat.sampleSize());
+    if (m_resampler)
+        m_resampler->start(inputAudioFormat.sampleRate(),
+                           audioFormat.sampleRate(),
+                           inputAudioFormat.channelCount(),
+                           audioFormat.channelCount(),
+                           inputAudioFormat.sampleSize());
 
-    m_opus_enc->start(audioFormat.sampleRate(),
-                      audioFormat.channelCount(),
-                      m_bitrate,
-                      m_frame_size,
-                      application);
+    if (m_opus_enc)
+        m_opus_enc->start(audioFormat.sampleRate(),
+                          audioFormat.channelCount(),
+                          m_bitrate,
+                          m_frame_size,
+                          application);
 #endif
 }
 
@@ -610,18 +842,20 @@ void AudioStreamingWorker::startOpusDecoder()
 #ifdef OPUS
     QAudioFormat format = m_streaming_info.audioFormat();
 
-    m_opus_dec->start(format.sampleRate(),
-                      format.channelCount(),
-                      m_frame_size,
-                      m_max_frame_size);
+    if (m_opus_dec)
+        m_opus_dec->start(format.sampleRate(),
+                          format.channelCount(),
+                          m_frame_size,
+                          m_max_frame_size);
 #endif
 }
 
-void AudioStreamingWorker::adjustSettingsPrivate(bool start_opus_encoder, bool start_opus_decoder, bool client_mode)
+void AudioStreamingWorker::adjustSettingsPrivate(bool client_mode)
 {
     QAudioFormat format = m_streaming_info.inputAudioFormat();
-#ifdef OPUS //Change the settings to Opus compatible settings
 
+#ifdef OPUS
+    //Change the settings to Opus compatible settings
     if (!client_mode)
     {
         int input_sample_rate = format.sampleRate();
@@ -667,15 +901,7 @@ void AudioStreamingWorker::adjustSettingsPrivate(bool start_opus_encoder, bool s
 
         m_streaming_info.setAudioFormat(format);
     }
-
-    if (start_opus_encoder)
-        startOpusEncoder();
-
-    if (start_opus_decoder)
-        startOpusDecoder();
 #else
-    Q_UNUSED(start_opus_encoder)
-    Q_UNUSED(start_opus_decoder)
     Q_UNUSED(client_mode)
 
     m_streaming_info.setAudioFormat(format);
@@ -880,14 +1106,15 @@ void AudioStreamingWorker::inputDataBack(const QByteArray &data)
     if (!m_streaming_info.isListenAudioInputEnabled() && m_level_meter_input)
         m_level_meter_input->write(middle);
 
-    if (m_streaming_info.isListenAudioInputEnabled() && m_audio_output)
-        m_audio_output->write(middle);
-
 #ifdef OPUS
     m_resampler->write(middle);
 #else
     if (m_streaming_info.isGetAudioEnabled() && !m_streaming_info.isListenAudioInputEnabled())
         emit veryInputData(middle);
+
+    if (m_streaming_info.isListenAudioInputEnabled() && m_audio_output)
+        m_audio_output->write(middle);
+
     posProcessedInput(middle);
 #endif
 }
@@ -983,16 +1210,8 @@ void AudioStreamingWorker::outputDataBack(const QByteArray &data)
 }
 
 //Convert flow control bytes to pseudo audio data
-void AudioStreamingWorker::flowControl(int bytes)
+void AudioStreamingWorker::flowControl(const QByteArray &data)
 {
-    QByteArray data = QByteArray(bytes, char(0));
-
-    if (!data.isEmpty())
-    {
-        Eigen::Ref<Eigen::VectorXf> samples = Eigen::Map<Eigen::VectorXf>(reinterpret_cast<float*>(data.data()), data.size() / int(sizeof(float)));
-        samples.fill(0);
-    }
-
     if (m_callback_enabled)
         emit inputData(data);
     else
@@ -1022,7 +1241,7 @@ void AudioStreamingWorker::setVolume(int volume)
         m_audio_output->setVolume(m_volume);
 }
 
-StreamingInfo AudioStreamingWorker::streamingInfo() const
+AudioStreamingLibInfo AudioStreamingWorker::audioStreamingLibInfo() const
 {
     return m_streaming_info;
 }
@@ -1167,31 +1386,15 @@ void AudioStreamingWorker::processClientInput(const PeerData &pd)
 
         if (INVALID_FORMAT)
         {
-            errorPrivate("Sample type and/or endiannes not supported!");
+            errorPrivate("Invalid format!");
             return;
         }
 
+        adjustSettingsPrivate(true);
+
         startAudioWorkers();
 
-        adjustSettingsPrivate(m_is_walkie_talkie, true, true);
-
-        if (m_is_walkie_talkie)
-        {
-            m_level_meter_input->start(m_streaming_info.inputAudioFormat());
-
-            if (m_flow_control)
-                m_flow_control->start(inputFormat.sampleRate(), inputFormat.channelCount(), inputFormat.sampleSize());
-            else
-                m_audio_input->start(m_streaming_info.inputDeviceInfo(), m_streaming_info.inputAudioFormat());
-        }
-
-        m_audio_output->start(m_streaming_info.outputDeviceInfo(),
-                              m_streaming_info.audioFormat(),
-                              m_streaming_info.timeToBuffer(),
-                              m_streaming_info.isGetAudioEnabled());
-
-        if (m_level_meter_output)
-            m_level_meter_output->start(m_streaming_info.audioFormat());
+        restartActiveWorkers();
 
         break;
     }
@@ -1295,7 +1498,7 @@ void AudioStreamingWorker::processWebClientInput(const PeerData &pd)
 
         if (INVALID_FORMAT)
         {
-            errorPrivate("Sample type and/or endiannes not supported!");
+            errorPrivate("Invalid format!");
             return;
         }
 
@@ -1309,22 +1512,7 @@ void AudioStreamingWorker::processWebClientInput(const PeerData &pd)
 
         startAudioWorkers();
 
-        adjustSettingsPrivate(true, true, true);
-
-        m_level_meter_input->start(m_streaming_info.inputAudioFormat());
-
-        if (m_flow_control)
-            m_flow_control->start(inputFormat.sampleRate(), inputFormat.channelCount(), inputFormat.sampleSize());
-        else
-            m_audio_input->start(m_streaming_info.inputDeviceInfo(), m_streaming_info.inputAudioFormat());
-
-        m_audio_output->start(m_streaming_info.outputDeviceInfo(),
-                              m_streaming_info.audioFormat(),
-                              m_streaming_info.timeToBuffer(),
-                              m_streaming_info.isGetAudioEnabled());
-
-        if (m_level_meter_output)
-            m_level_meter_output->start(m_streaming_info.audioFormat());
+        restartActiveWorkers();
 
         break;
     }
@@ -1480,8 +1668,8 @@ void AudioStreamingWorker::header(QByteArray data,
     stream >> max_frame_size;
     stream >> bitrate;
 
-    if (m_streaming_info.workMode() == StreamingInfo::StreamingWorkMode::BroadcastClient
-            || m_streaming_info.workMode() == StreamingInfo::StreamingWorkMode::WalkieTalkieClient)
+    if (m_streaming_info.workMode() == AudioStreamingLibInfo::StreamingWorkMode::BroadcastClient
+            || m_streaming_info.workMode() == AudioStreamingLibInfo::StreamingWorkMode::WalkieTalkieClient)
     {
         m_frame_size = frame_size;
         m_max_frame_size = max_frame_size;

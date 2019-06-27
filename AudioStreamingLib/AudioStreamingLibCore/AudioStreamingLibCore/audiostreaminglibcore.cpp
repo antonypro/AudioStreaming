@@ -16,7 +16,7 @@ AudioStreamingLibCore::AudioStreamingLibCore(QObject *parent) : QObject(parent)
 
     m_running = false;
 
-    qRegisterMetaType<StreamingInfo>("StreamingInfo");
+    qRegisterMetaType<AudioStreamingLibInfo>("AudioStreamingLibInfo");
     qRegisterMetaType<QHostAddress>("QHostAddress");
 }
 
@@ -25,7 +25,7 @@ AudioStreamingLibCore::~AudioStreamingLibCore()
     stop();
 }
 
-bool AudioStreamingLibCore::start(const StreamingInfo &streaming_info)
+bool AudioStreamingLibCore::start(const AudioStreamingLibInfo &streaming_info)
 {
     if (m_running)
         return false;
@@ -48,10 +48,11 @@ bool AudioStreamingLibCore::start(const StreamingInfo &streaming_info)
     connect(m_worker, &AudioStreamingWorker::outputLevel, this, &AudioStreamingLibCore::outputLevel);
     connect(m_worker, &AudioStreamingWorker::adjustSettings, this, &AudioStreamingLibCore::adjustSettings);
     connect(m_worker, &AudioStreamingWorker::extraDataWritten, this, &AudioStreamingLibCore::extraDataWritten);
+    connect(m_worker, &AudioStreamingWorker::warning, this, &AudioStreamingLibCore::warning);
     connect(m_worker, &AudioStreamingWorker::error, this, &AudioStreamingLibCore::error);
     connect(m_worker, &AudioStreamingWorker::error, this, &AudioStreamingLibCore::stop);
 
-    QMetaObject::invokeMethod(m_worker, "start", Qt::QueuedConnection, Q_ARG(StreamingInfo, streaming_info));
+    QMetaObject::invokeMethod(m_worker, "start", Qt::QueuedConnection, Q_ARG(AudioStreamingLibInfo, streaming_info));
 
     QMetaObject::invokeMethod(m_worker, "setVolume", Qt::QueuedConnection, Q_ARG(int, m_volume));
     QMetaObject::invokeMethod(m_worker, "setInputMuted", Qt::QueuedConnection, Q_ARG(bool, m_input_muted));
@@ -177,6 +178,22 @@ bool AudioStreamingLibCore::isRunning()
     return RUNNING;
 }
 
+void AudioStreamingLibCore::changeInputDevice(const QAudioDeviceInfo &dev_info)
+{
+    if (!RUNNING)
+        return;
+
+    QMetaObject::invokeMethod(m_worker, "changeInputDevice", Qt::QueuedConnection, Q_ARG(QAudioDeviceInfo, dev_info));
+}
+
+void AudioStreamingLibCore::changeOutputDevice(const QAudioDeviceInfo &dev_info)
+{
+    if (!RUNNING)
+        return;
+
+    QMetaObject::invokeMethod(m_worker, "changeOutputDevice", Qt::QueuedConnection, Q_ARG(QAudioDeviceInfo, dev_info));
+}
+
 DiscoverClient *AudioStreamingLibCore::discoverInstance(int time_to_destroy)
 {
     if (m_client_discover)
@@ -196,7 +213,7 @@ void AudioStreamingLibCore::listen(quint16 port, bool auto_accept, const QByteAr
     if (!RUNNING)
         return;
 
-    QMetaObject::invokeMethod(m_worker, "listen", Qt::BlockingQueuedConnection,
+    QMetaObject::invokeMethod(m_worker, "listen", Qt::QueuedConnection,
                               Q_ARG(quint16, port), Q_ARG(bool, auto_accept), Q_ARG(QByteArray, password), Q_ARG(int, qMax(max_connections, 1)));
 }
 
@@ -205,7 +222,7 @@ void AudioStreamingLibCore::connectToHost(const QString &host, quint16 port, con
     if (!RUNNING)
         return;
 
-    QMetaObject::invokeMethod(m_worker, "connectToHost", Qt::BlockingQueuedConnection,
+    QMetaObject::invokeMethod(m_worker, "connectToHost", Qt::QueuedConnection,
                               Q_ARG(QString, host), Q_ARG(quint16, port), Q_ARG(QByteArray, password));
 }
 
@@ -321,7 +338,7 @@ int AudioStreamingLibCore::volume()
 
 void AudioStreamingLibCore::setVolume(int volume)
 {
-    m_volume = qBound(0, volume, 100);
+    m_volume = qBound(0, volume, 150);
 
     if (!RUNNING)
         return;
@@ -329,13 +346,13 @@ void AudioStreamingLibCore::setVolume(int volume)
     QMetaObject::invokeMethod(m_worker, "setVolume", Qt::QueuedConnection, Q_ARG(int, m_volume));
 }
 
-StreamingInfo AudioStreamingLibCore::streamingInfo()
+AudioStreamingLibInfo AudioStreamingLibCore::audioStreamingLibInfo()
 {
     if (!RUNNING)
-        return StreamingInfo();
+        return AudioStreamingLibInfo();
 
-    StreamingInfo streaming_info;
-    QMetaObject::invokeMethod(m_worker, "streamingInfo", Qt::BlockingQueuedConnection, Q_RETURN_ARG(StreamingInfo, streaming_info));
+    AudioStreamingLibInfo streaming_info;
+    QMetaObject::invokeMethod(m_worker, "audioStreamingLibInfo", Qt::BlockingQueuedConnection, Q_RETURN_ARG(AudioStreamingLibInfo, streaming_info));
     return streaming_info;
 }
 
@@ -367,8 +384,8 @@ QAudioFormat AudioStreamingLibCore::audioFormat()
     if (m_audio_format.isValid())
         return m_audio_format;
 
-    StreamingInfo streaming_info;
-    QMetaObject::invokeMethod(m_worker, "streamingInfo", Qt::BlockingQueuedConnection, Q_RETURN_ARG(StreamingInfo, streaming_info));
+    AudioStreamingLibInfo streaming_info;
+    QMetaObject::invokeMethod(m_worker, "audioStreamingLibInfo", Qt::BlockingQueuedConnection, Q_RETURN_ARG(AudioStreamingLibInfo, streaming_info));
     m_audio_format = streaming_info.audioFormat();
 
     return m_audio_format;
@@ -382,14 +399,14 @@ QAudioFormat AudioStreamingLibCore::inputAudioFormat()
     if (m_input_format.isValid())
         return m_input_format;
 
-    StreamingInfo streaming_info;
-    QMetaObject::invokeMethod(m_worker, "streamingInfo", Qt::BlockingQueuedConnection, Q_RETURN_ARG(StreamingInfo, streaming_info));
+    AudioStreamingLibInfo streaming_info;
+    QMetaObject::invokeMethod(m_worker, "audioStreamingLibInfo", Qt::BlockingQueuedConnection, Q_RETURN_ARG(AudioStreamingLibInfo, streaming_info));
     m_input_format = streaming_info.inputAudioFormat();
 
     return m_input_format;
 }
 
-QDataStream &operator<<(QDataStream &stream, StreamingInfo &info)
+QDataStream &operator<<(QDataStream &stream, AudioStreamingLibInfo &info)
 {
     stream << info.negotiationString();
 
@@ -424,7 +441,7 @@ QDataStream &operator<<(QDataStream &stream, StreamingInfo &info)
     return stream;
 }
 
-QDataStream &operator>>(QDataStream &stream, StreamingInfo &info)
+QDataStream &operator>>(QDataStream &stream, AudioStreamingLibInfo &info)
 {
     QByteArray negotiationString;
     stream >> negotiationString;
@@ -517,10 +534,10 @@ QDataStream &operator>>(QDataStream &stream, StreamingInfo &info)
     }
 
     info.setNegotiationString(negotiationString);
-    info.setWorkMode(StreamingInfo::StreamingWorkMode(workMode));
+    info.setWorkMode(AudioStreamingLibInfo::StreamingWorkMode(workMode));
     info.setTimeToBuffer(timeToBuffer);
-    info.setInputDeviceType(StreamingInfo::AudioDeviceType(inputDeviceType));
-    info.setOutputDeviceType(StreamingInfo::AudioDeviceType(outputDeviceType));
+    info.setInputDeviceType(AudioStreamingLibInfo::AudioDeviceType(inputDeviceType));
+    info.setOutputDeviceType(AudioStreamingLibInfo::AudioDeviceType(outputDeviceType));
     info.setInputAudioFormat(inputformat);
     info.setAudioFormat(format);
     info.setInputDeviceInfo(inputinfo);
@@ -531,7 +548,7 @@ QDataStream &operator>>(QDataStream &stream, StreamingInfo &info)
     return stream;
 }
 
-QDebug &operator<<(QDebug &debug, StreamingInfo &info)
+QDebug &operator<<(QDebug &debug, AudioStreamingLibInfo &info)
 {
     debug << "Negotiation string:" << qPrintable(info.negotiationString().trimmed()) << endl;
 
@@ -541,19 +558,19 @@ QDebug &operator<<(QDebug &debug, StreamingInfo &info)
 
     switch (info.workMode())
     {
-    case StreamingInfo::StreamingWorkMode::Undefined:
+    case AudioStreamingLibInfo::StreamingWorkMode::Undefined:
         debug << "Undefined" << endl;
         break;
-    case StreamingInfo::StreamingWorkMode::BroadcastClient:
+    case AudioStreamingLibInfo::StreamingWorkMode::BroadcastClient:
         debug << "BroadcastClient" << endl;
         break;
-    case StreamingInfo::StreamingWorkMode::BroadcastServer:
+    case AudioStreamingLibInfo::StreamingWorkMode::BroadcastServer:
         debug << "BroadcastServer" << endl;
         break;
-    case StreamingInfo::StreamingWorkMode::WalkieTalkieClient:
+    case AudioStreamingLibInfo::StreamingWorkMode::WalkieTalkieClient:
         debug << "WalkieTalkieClient" << endl;
         break;
-    case StreamingInfo::StreamingWorkMode::WalkieTalkieServer:
+    case AudioStreamingLibInfo::StreamingWorkMode::WalkieTalkieServer:
         debug << "WalkieTalkieServer" << endl;
         break;
     default:
@@ -566,10 +583,10 @@ QDebug &operator<<(QDebug &debug, StreamingInfo &info)
 
     switch (info.inputDeviceType())
     {
-    case StreamingInfo::AudioDeviceType::LibraryAudioDevice:
+    case AudioStreamingLibInfo::AudioDeviceType::LibraryAudioDevice:
         debug << "LibraryAudioDevice" << endl;
         break;
-    case StreamingInfo::AudioDeviceType::CustomAudioDevice:
+    case AudioStreamingLibInfo::AudioDeviceType::CustomAudioDevice:
         debug << "CustomAudioDevice" << endl;
         break;
     }
@@ -578,10 +595,10 @@ QDebug &operator<<(QDebug &debug, StreamingInfo &info)
 
     switch (info.outputDeviceType())
     {
-    case StreamingInfo::AudioDeviceType::LibraryAudioDevice:
+    case AudioStreamingLibInfo::AudioDeviceType::LibraryAudioDevice:
         debug << "LibraryAudioDevice" << endl;
         break;
-    case StreamingInfo::AudioDeviceType::CustomAudioDevice:
+    case AudioStreamingLibInfo::AudioDeviceType::CustomAudioDevice:
         debug << "CustomAudioDevice" << endl;
         break;
     }

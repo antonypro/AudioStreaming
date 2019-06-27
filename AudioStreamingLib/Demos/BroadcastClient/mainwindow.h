@@ -38,10 +38,12 @@ private slots:
     void resetRecordPage();
     void writeToFile(const QByteArray &data);
     void volumeChanged(int volume);
+    void warning(const QString &warning);
     void error(const QString &error);
     void connected(const QHostAddress &address, const QString &id);
     void disconnected(const QHostAddress &address);
     void finished();
+    void currentIndexChanged(int index);
     void getDevInfo();
 
 private:
@@ -74,6 +76,8 @@ private:
     QCheckBox *boxautostart;
 
     QPlainTextEdit *texteditlog;
+    QCheckBox *boxlogtowidget;
+    QPushButton *buttonclearlog;
 
     QPointer<AudioRecorder> m_audio_recorder;
     QPointer<MP3Recorder> m_audio_recorder_mp3;

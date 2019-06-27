@@ -38,6 +38,7 @@ void FFMPEGClass::initWidgets()
 {
     play_pause = new QPushButton(this);
     stop = new QPushButton(this);
+    repeat = new QPushButton(this);
 
     info = new QLabel(this);
 
@@ -49,6 +50,7 @@ void FFMPEGClass::initWidgets()
     info->setStyleSheet("QLabel {color: blue;}");
 
     stop->setEnabled(false);
+    repeat->setCheckable(true);
     media_list->setDragDropMode(QAbstractItemView::InternalMove);
 
     connect(play_pause, &QPushButton::clicked, this, &FFMPEGClass::playPausePrivate);
@@ -69,6 +71,7 @@ void FFMPEGClass::initWidgets()
 
     play_pause->setIcon(style()->standardIcon(QStyle::SP_MediaPlay));
     stop->setIcon(style()->standardIcon(QStyle::SP_MediaStop));
+    repeat->setIcon(style()->standardIcon(QStyle::SP_BrowserReload));
 
     add->setIcon(style()->standardIcon(QStyle::SP_FileDialogNewFolder));
     remove->setIcon(style()->standardIcon(QStyle::SP_BrowserStop));
@@ -76,6 +79,7 @@ void FFMPEGClass::initWidgets()
     QHBoxLayout *layouth = new QHBoxLayout();
     layouth->addWidget(play_pause);
     layouth->addWidget(stop);
+    layouth->addWidget(repeat);
     layouth->addSpacing(10);
     layouth->addWidget(info);
     layouth->addSpacing(10);
@@ -175,26 +179,19 @@ void FFMPEGClass::readThread(const QString &path)
 
         QByteArray data = ffmpeg_app.readAllStandardOutput();
 
-        forever
-        {
-            m_semaphore.acquire();
+        m_semaphore.acquire();
 
-            if (!m_running)
-                break;
+        if (!m_running)
+            break;
 
-            if (data.isEmpty())
-                break;
+        if (data.isEmpty())
+            continue;
 
-            QByteArray mid = data.mid(0, TIMETOSIZE(100));
-            data.remove(0, mid.size());
+        decoded_ms += SIZETOTIME(data.size());
 
-            decoded_ms += SIZETOTIME(mid.size());
+        emit decoded(decoded_ms, total_ms);
 
-            emit decoded(decoded_ms, total_ms);
-
-            if (!mid.isEmpty())
-                emit rawAudio(mid);
-        }
+        emit rawAudio(data);
     }
 
     if (!m_running)
@@ -284,7 +281,7 @@ void FFMPEGClass::playPausePrivate()
 
             item->setSelected(true);
 
-            item->setTextColor(Qt::blue);
+            item->setForeground(Qt::blue);
 
             start();
         }
@@ -321,7 +318,7 @@ void FFMPEGClass::stopPrivate()
 
     QListWidgetItem *item = media_list->item(m_current_row);
 
-    item->setTextColor(QApplication::palette().text().color());
+    item->setForeground(QApplication::palette().text().color());
 
     m_current_path = QString();
     m_current_row = 0;
@@ -411,17 +408,23 @@ void FFMPEGClass::finishedPrivate()
     QListWidgetItem *item = media_list->item(m_current_row);
     QListWidgetItem *next_item = media_list->item(m_current_row + 1);
 
+    if (!next_item && repeat->isChecked())
+    {
+        m_current_row = -1;
+        next_item = media_list->item(m_current_row + 1);
+    }
+
     info->clear();
 
     if (next_item)
     {
-        item->setTextColor(QApplication::palette().text().color());
+        item->setForeground(QApplication::palette().text().color());
 
         m_current_path = next_item->data(Qt::UserRole).toString();
         next_item->setSelected(true);
         media_list->setCurrentRow(m_current_row + 1);
         next_item->setSelected(true);
-        next_item->setTextColor(Qt::blue);
+        next_item->setForeground(Qt::blue);
 
         m_current_row++;
 
@@ -432,7 +435,7 @@ void FFMPEGClass::finishedPrivate()
         stop->setEnabled(false);
         play_pause->setIcon(style()->standardIcon(QStyle::SP_MediaPlay));
         m_current_path = QString();
-        if (item) item->setTextColor(QApplication::palette().text().color());
+        if (item) item->setForeground(QApplication::palette().text().color());
         media_list->setCurrentRow(0);
         m_paused_stopped = true;
         m_current_row = 0;
