@@ -257,7 +257,7 @@ void AudioStreamingWorker::startInputAudioWorkers()
                 m_audio_output->start(m_streaming_info.outputDeviceInfo(),
                                       m_streaming_info.audioFormat(),
                                       m_streaming_info.timeToBuffer(),
-                                      m_streaming_info.isGetAudioEnabled());
+                                      true /*is_very_output_enabled*/);
             }
             else
             {
@@ -513,7 +513,7 @@ void AudioStreamingWorker::restartActiveWorkers()
     if (m_level_meter_input)
         m_level_meter_input->start(m_streaming_info.inputAudioFormat());
 
-    if (m_streaming_info.workMode() !=  AudioStreamingLibInfo::StreamingWorkMode::BroadcastServer)
+    if (m_streaming_info.workMode() != AudioStreamingLibInfo::StreamingWorkMode::BroadcastServer)
     {
         if (m_audio_output)
             m_audio_output->start(m_streaming_info.outputDeviceInfo(),
