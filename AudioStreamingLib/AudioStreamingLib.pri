@@ -75,6 +75,8 @@ message("AudioStreamingLib is using settings for Windows Visual Studio 32 bits")
 
 CONFIG += KNOWNDEVICE
 
+DEFINES += NOMINMAX
+
 DEFINES += EIGEN_MPL2_ONLY
 DEFINES += EIGEN_DONT_VECTORIZE #Clear vector flags
 
@@ -126,6 +128,8 @@ contains(QT_ARCH, x86_64):win32-msvc* { #VISUAL STUDIO 64 bits
 message("AudioStreamingLib is using settings for Windows Visual Studio 64 bits")
 
 CONFIG += KNOWNDEVICE
+
+DEFINES += NOMINMAX
 
 DEFINES += EIGEN_MPL2_ONLY
 DEFINES += EIGEN_DONT_VECTORIZE #Clear vector flags

@@ -1,6 +1,11 @@
 #ifndef R8BRAIN_H
 #define R8BRAIN_H
 
+#ifdef __GNUC__
+#pragma GCC diagnostic ignored "-Wpragmas"
+#pragma GCC diagnostic ignored "-Wunused-private-field"
+#endif
+
 #include <QtCore>
 #include <limits>
 #include <r8bbase.h>
