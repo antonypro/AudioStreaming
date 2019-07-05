@@ -34,6 +34,16 @@ r8brain::~r8brain()
     STOP_THREAD
 }
 
+void r8brain::stopPrivate()
+{
+    deleteLater();
+}
+
+void r8brain::stop()
+{
+    QTimer::singleShot(0, this, &r8brain::stopPrivate);
+}
+
 void r8brain::startPrivate(int in_sample_rate, int out_sample_rate, int in_channels, int out_channels, int sample_size)
 {
     if (m_initialized)

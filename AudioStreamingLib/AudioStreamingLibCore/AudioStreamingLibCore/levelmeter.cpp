@@ -13,6 +13,16 @@ LevelMeter::~LevelMeter()
     STOP_THREAD
 }
 
+void LevelMeter::stopPrivate()
+{
+    deleteLater();
+}
+
+void LevelMeter::stop()
+{
+    QTimer::singleShot(0, this, &LevelMeter::stopPrivate);
+}
+
 void LevelMeter::startPrivate(const QAudioFormat &format)
 {
     m_level = -1;

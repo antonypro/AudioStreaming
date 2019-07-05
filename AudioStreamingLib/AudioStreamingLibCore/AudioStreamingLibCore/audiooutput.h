@@ -5,6 +5,7 @@
 #include <QtMultimedia>
 #include "audiostreaminglibcore.h"
 #include "common.h"
+#include "threadcommon.h"
 #include "levelmeter.h"
 #include "flowcontrol.h"
 
@@ -15,6 +16,8 @@ class AudioOutput : public QObject
 public:
     explicit AudioOutput(QObject *parent = nullptr);
     ~AudioOutput();
+
+    CLASS_MEMBER_HEADER
 
 signals:
     void veryOutputData(QByteArray);

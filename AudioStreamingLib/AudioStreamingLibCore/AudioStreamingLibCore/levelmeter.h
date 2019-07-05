@@ -4,6 +4,7 @@
 #include <QtCore>
 #include <QtMultimedia>
 #include "common.h"
+#include "threadcommon.h"
 
 //\cond HIDDEN_SYMBOLS
 class LevelMeter : public QObject
@@ -12,6 +13,8 @@ class LevelMeter : public QObject
 public:
     explicit LevelMeter(QObject *parent = nullptr);
     ~LevelMeter();
+
+    CLASS_MEMBER_HEADER
 
 signals:
     void currentlevel(float);

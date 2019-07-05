@@ -1,4 +1,4 @@
-#include "audiostreamingworker.h"
+﻿#include "audiostreamingworker.h"
 
 #if defined (IS_TO_DEBUG_VERBOSE_1) || defined (IS_TO_DEBUG_VERBOSE_2)
 QMutex record_mutex;
@@ -47,6 +47,16 @@ AudioStreamingWorker::AudioStreamingWorker(QObject *parent) : QObject(parent)
 AudioStreamingWorker::~AudioStreamingWorker()
 {
     STOP_THREAD
+}
+
+void AudioStreamingWorker::stopPrivate()
+{
+    deleteLater();
+}
+
+void AudioStreamingWorker::stop()
+{
+    QTimer::singleShot(0, this, &AudioStreamingWorker::stopPrivate);
 }
 
 void AudioStreamingWorker::start(const AudioStreamingLibInfo &streaming_info)
@@ -536,29 +546,29 @@ void AudioStreamingWorker::restartActiveWorkers()
 void AudioStreamingWorker::stopInputAudioWorkers()
 {
     if (m_audio_input)
-        m_audio_input->deleteLater();
+        m_audio_input->stop();
     if (m_flow_control)
-        m_flow_control->deleteLater();
+        m_flow_control->stop();
 #ifdef OPUS
     if (m_resampler)
-        m_resampler->deleteLater();
+        m_resampler->stop();
     if (m_opus_enc)
-        m_opus_enc->deleteLater();
+        m_opus_enc->stop();
 #endif
     if (m_level_meter_input)
-        m_level_meter_input->deleteLater();
+        m_level_meter_input->stop();
 }
 
 void AudioStreamingWorker::stopOutputAudioWorkers()
 {
     if (m_audio_output)
-        m_audio_output->deleteLater();
+        m_audio_output->stop();
 #ifdef OPUS
     if (m_opus_dec)
-        m_opus_dec->deleteLater();
+        m_opus_dec->stop();
 #endif
     if (m_level_meter_output)
-        m_level_meter_output->deleteLater();
+        m_level_meter_output->stop();
 }
 
 void AudioStreamingWorker::stopAudioWorkers()
@@ -588,7 +598,7 @@ void AudioStreamingWorker::changeInputDevice(const QAudioDeviceInfo &dev_info)
 
     if (m_input_device_changing)
     {
-        QMetaObject::invokeMethod(this, "changeInputDevice", Qt::QueuedConnection, Q_ARG(QAudioDeviceInfo, dev_info));
+        m_input_device_pending = dev_info;
         return;
     }
 
@@ -635,6 +645,13 @@ void AudioStreamingWorker::restartInputLater()
         restartActiveWorkers();
 
     m_input_device_changing = false;
+
+    if (!m_input_device_pending.isNull())
+    {
+        QAudioDeviceInfo dev_info = m_input_device_pending;
+        m_input_device_pending = QAudioDeviceInfo();
+        changeInputDevice(dev_info);
+    }
 }
 
 void AudioStreamingWorker::changeOutputDevice(const QAudioDeviceInfo &dev_info)
@@ -647,13 +664,13 @@ void AudioStreamingWorker::changeOutputDevice(const QAudioDeviceInfo &dev_info)
 
     if (!m_output_device_running)
     {
-        emit warning("No output device running, nothing to change!'");
+        emit warning("No output device running, nothing to change!");
         return;
     }
 
     if (m_output_device_changing)
     {
-        QMetaObject::invokeMethod(this, "changeOutputDevice", Qt::QueuedConnection, Q_ARG(QAudioDeviceInfo, dev_info));
+        m_output_device_pending = dev_info;
         return;
     }
 
@@ -692,6 +709,13 @@ void AudioStreamingWorker::restartOutputLater()
         restartActiveWorkers();
 
     m_output_device_changing = false;
+
+    if (!m_output_device_pending.isNull())
+    {
+        QAudioDeviceInfo dev_info = m_output_device_pending;
+        m_output_device_pending = QAudioDeviceInfo();
+        changeOutputDevice(dev_info);
+    }
 }
 
 void AudioStreamingWorker::listen(quint16 port, bool auto_accept, const QByteArray &password, int max_connections)

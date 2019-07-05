@@ -4,6 +4,7 @@
 #include <QtCore>
 #include <QtMultimedia>
 #include "common.h"
+#include "threadcommon.h"
 
 //\cond HIDDEN_SYMBOLS
 class AudioInput : public QObject
@@ -12,6 +13,8 @@ class AudioInput : public QObject
 public:
     explicit AudioInput(QObject *parent = nullptr);
     ~AudioInput();
+
+    CLASS_MEMBER_HEADER
 
 signals:
     void error(QString);

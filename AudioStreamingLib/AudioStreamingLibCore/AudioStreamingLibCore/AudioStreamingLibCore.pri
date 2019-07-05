@@ -31,6 +31,7 @@ HEADERS +=  $$PWD/audiostreaminglibcore.h \
             $$PWD/audiostreamingworker.h \
             $$PWD/common.h \
             $$PWD/audiocommon.h \
+            $$PWD/threadcommon.h \
             $$PWD/discoverserver.h \
             $$PWD/discoverclient.h \
             $$PWD/abstractclient.h \

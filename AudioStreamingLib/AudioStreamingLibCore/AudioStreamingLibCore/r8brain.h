@@ -10,6 +10,7 @@
 #include <limits>
 #include <r8bbase.h>
 #include <CDSPResampler.h>
+#include "threadcommon.h"
 
 //\cond HIDDEN_SYMBOLS
 using namespace r8b;
@@ -22,6 +23,8 @@ class r8brain : public QObject
 public:
     explicit r8brain(QObject *parent = nullptr);
     ~r8brain();
+
+    CLASS_MEMBER_HEADER
 
 signals:
     void resampled(QByteArray);

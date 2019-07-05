@@ -20,6 +20,11 @@ FlowControl::FlowControl(QObject *parent) : QObject(parent)
     m_timer->setInterval(interval);
 }
 
+void FlowControl::stop()
+{
+    deleteLater();
+}
+
 void FlowControl::start(int sample_rate, int channels, int bits_per_sample)
 {
     if (sample_rate < 8000 || sample_rate > 192000)

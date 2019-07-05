@@ -555,7 +555,7 @@ void MainWindow::volumeChanged(int volume)
 void MainWindow::warning(const QString &warning)
 {
     if (!warning.isEmpty())
-        msgBoxCritical("Warning", warning, this);
+        msgBoxWarning("Warning", warning, this);
 }
 
 void MainWindow::error(const QString &error)

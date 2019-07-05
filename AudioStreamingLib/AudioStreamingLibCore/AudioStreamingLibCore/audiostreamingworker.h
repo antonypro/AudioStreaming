@@ -3,6 +3,7 @@
 
 #include <QtCore>
 #include "common.h"
+#include "threadcommon.h"
 #include "audiostreaminglibcore.h"
 #include "discoverserver.h"
 #include "server.h"
@@ -26,6 +27,8 @@ class AudioStreamingWorker : public QObject
 public:
     explicit AudioStreamingWorker(QObject *parent = nullptr);
     ~AudioStreamingWorker();
+
+    CLASS_MEMBER_HEADER
 
 signals:
     void connected(QHostAddress,QString);
@@ -139,6 +142,9 @@ private:
 
     QHash<qintptr, qint32> m_hash_heart_beat;
     QHash<qintptr, QElapsedTimer> m_hash_heart_beat_time;
+
+    QAudioDeviceInfo m_input_device_pending;
+    QAudioDeviceInfo m_output_device_pending;
 
 #ifdef OPUS
     qint32 m_frame_size;

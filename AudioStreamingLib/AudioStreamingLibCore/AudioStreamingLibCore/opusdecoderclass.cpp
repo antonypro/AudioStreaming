@@ -22,6 +22,16 @@ OpusDecoderClass::~OpusDecoderClass()
     STOP_THREAD
 }
 
+void OpusDecoderClass::stopPrivate()
+{
+    deleteLater();
+}
+
+void OpusDecoderClass::stop()
+{
+    QTimer::singleShot(0, this, &OpusDecoderClass::stopPrivate);
+}
+
 void OpusDecoderClass::startPrivate(int sample_rate, int channels, int frame_size, int max_frame_size)
 {
     if (m_initialized)

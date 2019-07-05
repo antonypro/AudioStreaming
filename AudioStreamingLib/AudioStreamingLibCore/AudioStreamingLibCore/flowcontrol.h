@@ -16,6 +16,7 @@ signals:
     void readyRead(QByteArray);
 
 public slots:
+    void stop();
     void start(int sample_rate, int channels, int bits_per_sample);
 
 private slots:

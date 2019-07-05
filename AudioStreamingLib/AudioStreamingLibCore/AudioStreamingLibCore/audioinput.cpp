@@ -10,6 +10,25 @@ AudioInput::~AudioInput()
     STOP_THREAD
 }
 
+void AudioInput::stopPrivate()
+{
+    if (!m_audio_input)
+    {
+        deleteLater();
+        return;
+    }
+
+    connect(m_audio_input, &QAudioInput::destroyed, this, &AudioInput::deleteLater, Qt::UniqueConnection);
+
+    m_audio_input->stop();
+    m_audio_input->deleteLater();
+}
+
+void AudioInput::stop()
+{
+    QTimer::singleShot(0, this, &AudioInput::stopPrivate);
+}
+
 void AudioInput::startPrivate(const QAudioDeviceInfo &devinfo,
                               const QAudioFormat &format)
 {

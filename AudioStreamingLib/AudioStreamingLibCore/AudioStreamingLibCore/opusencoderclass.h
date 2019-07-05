@@ -9,6 +9,7 @@
 #include <opus.h>
 #include <stdio.h>
 #include "common.h"
+#include "threadcommon.h"
 
 //\cond HIDDEN_SYMBOLS
 class OpusEncoderClass : public QObject
@@ -17,6 +18,8 @@ class OpusEncoderClass : public QObject
 public:
     explicit OpusEncoderClass(QObject *parent = nullptr);
     ~OpusEncoderClass();
+
+    CLASS_MEMBER_HEADER
 
 signals:
     void encoded(QByteArray);

@@ -30,6 +30,37 @@ AudioOutput::~AudioOutput()
     STOP_THREAD
 }
 
+void AudioOutput::stopPrivate()
+{
+    if (!m_audio_output)
+    {
+        deleteLater();
+        return;
+    }
+
+    if (m_audio_output->state() != QAudio::ActiveState)
+    {
+        deleteLater();
+        return;
+    }
+
+    connect(m_audio_output, &QAudioOutput::stateChanged, this, [=](QAudio::State state){
+        if (state == QAudio::StoppedState)
+            m_audio_output->deleteLater();
+    });
+
+    connect(m_audio_output, &QAudioOutput::destroyed, m_device, &QIODevice::deleteLater, Qt::UniqueConnection);
+
+    connect(m_device, &QIODevice::destroyed, this, &AudioOutput::deleteLater, Qt::UniqueConnection);
+
+    m_audio_output->stop();
+}
+
+void AudioOutput::stop()
+{
+    QTimer::singleShot(0, this, &AudioOutput::stopPrivate);
+}
+
 void AudioOutput::startPrivate(const QAudioDeviceInfo &devinfo,
                                const QAudioFormat &format,
                                int time_to_buffer,
@@ -352,7 +383,10 @@ void AudioOutput::play()
 
     int readlen = m_audio_output->periodSize();
 
-    int chunks = m_audio_output->bytesFree() / readlen;
+    int chunks = 0;
+
+    if (readlen > 0)
+        chunks = m_audio_output->bytesFree() / readlen;
 
     LIB_DEBUG_LEVEL_2("Chunks:" << chunks);
 
